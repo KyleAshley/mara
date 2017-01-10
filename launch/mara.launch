@@ -1,0 +1,7 @@
+<launch>
+	
+	<!-- Launch the camera nodes -->
+	<node pkg="mara" type="camera_publisher.py" name="camera_1" args="camera_front_1 0" output="screen"/>
+	<node pkg="mara" type="camera_publisher.py" name="camera_2" args="camera_front_2 1" output="screen"/>
+
+</launch>
