@@ -15,7 +15,7 @@ class stereo():
 		self.img_right = None
 		self.img_left = None	
 
-		self.stereo = cv2.StereoSGBM_create(minDisparity=1, numDisparities=256, blockSize=9, mode=True)
+		self.stereo = cv2.StereoSGBM_create(minDisparity=1, numDisparities=128, blockSize=15, mode=True)
 		self.bridge = CvBridge()
 
 		self.img_left_sub = rospy.Subscriber('camera_front_1/image_rgb', Image, self.imageLeftCb)
@@ -54,6 +54,6 @@ if __name__ == "__main__":
 	rospy.init_node('mara_stereo', anonymous=True)		
 	stereo = stereo()
 	stereo.disarityCalculate()
-	#rospy.spin()
+	rospy.spin()
 
 		
