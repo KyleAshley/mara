@@ -9,7 +9,9 @@ import datetime
 # NOTES
 # - On startup:
 # 	- gripper auto closes, need to command positive velocity to open before sending more commands 
-# sudo modprobe usbserial vendor=0x067b product=0x2303 
+# Before running:
+# - $ sudo chmod +777 /dev/ttyUSB0
+# - $ sudo modprobe usbserial vendor=0x067b product=0x2303 
 
 class mara_serial():
 	def __init__(self, left_right='lr'):
@@ -276,10 +278,10 @@ class mara_serial():
 			# iterate through joints and set stopping range
 			for joint_name in angles.keys():
 				if 'g' in joint_name:
-					tolerance = 2.0
+					tolerance = 5.0
 					isGripper = True
 				else:
-					tolerance = 1.0
+					tolerance = 5.0
 					isGripper = False
 
 				# check if were moving clockwise or counterclockwise
@@ -315,6 +317,7 @@ class mara_serial():
 			period = 0.2
 			while not all(stop_conditions.values()):
 
+
 				print "STOP CONDIS", stop_conditions
 				print "CMD VELS", cmd_vels
 				print "DUTY RATIOS", duty_ratios
@@ -339,23 +342,23 @@ class mara_serial():
 						if r < curr_duty and cmd_vels[j] != 0:
 							isChangedVel = True
 							cmd_vels[j] = 0
-					
+
 					if isChangedVel:
 						# low velocity command
 						self.commandAllJointVelocities(cmd_vels, left_right=left_right)
-						time.sleep(0.0001)
+						time.sleep(0.0008)
 
 				t5 = time.time()
 				# iterate through joints and set stopping range
 				for joint_name in angles.keys():
 					if 'g' in joint_name:
-						tolerance = 2.0
+						tolerance = 5.0
 						isGripper = True
 					else:
-						tolerance = 1.0
+						tolerance = 5.0
 						isGripper = False
 
-					measured_vel = (l_angles[joint_name] - l_angles_prev[joint_name]) / (t5-t1)
+					measured_vel = (l_angles[joint_name] - l_angles_prev[joint_name]) / period
 					measured_vels[joint_name] = measured_vel
 
 					# check velocity command if we're moving clockwise or counterclockwise
@@ -381,21 +384,26 @@ class mara_serial():
 					else:
 						duty_ratio = (abs(vel)) / 30.0
 
-
-
 					# set joint commands
 					# TODO: here is where pid comes in?
-					cmd_vels[joint_name] = vel
+					kd = 0.1
+					delta_v = vel - measured_vel
+					pid_vel = vel + kd*delta_v
+					print "NEW", vel, measured_vel, pid_vel
+
+					cmd_vels[joint_name] = pid_vel
 					duty_ratios[joint_name] = duty_ratio
 					stop_conditions[joint_name] = stop_condition
 
 				
 
 				print "VELOCITIES", measured_vels
+				print "ANGLES", l_angles
 				t6 = time.time()
 				t_wait = period - (t6 - t1)
 				time.sleep(max(t_wait, 0.0))
 				t7 = time.time()
+
 
 
 
@@ -481,8 +489,12 @@ mara_serial.initializeGripper(left_right=left_right)
 #mara_serial.testVelocity( 'j1', 30, left_right=left_right)
 #print mara_serial.getJointAngles()
 
-desired_angles = {'g': 40, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 120, 'j3': 240}
-vel_commands = {'j1':5, 'j2':8, 'j3':6, 'j4':6, 'j5':7, 'j6':6, 'g':10}
+#desired_angles = {'g': 40, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 140, 'j3': 270}
+#vel_commands = {'j1':0, 'j2':0, 'j3':5, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+#mara_serial.commandAllJointAngles(desired_angles, vel_commands, left_right, variable_velocity=False)
+
+desired_angles = {'g': 40, 'j4': 0, 'j5': 0, 'j6': 0, 'j1': 0, 'j2': 0, 'j3': 0}
+vel_commands = {'j1':5, 'j2':5, 'j3':5, 'j4':5, 'j5':5, 'j6':5, 'g':5}
 mara_serial.commandAllJointAngles(desired_angles, vel_commands, left_right, variable_velocity=False)
 
 #mara_serial.commandJointAngle('g', 60, 20, left_right='l')
