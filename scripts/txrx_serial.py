@@ -25,6 +25,9 @@ class mara_serial():
 
 		self.orderedJoints = ['g', 'j6', 'j5', 'j4', 'j3', 'j2', 'j1']
 
+		self.l_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+		self.r_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+
 		self.project_path = "/home/carrt/Dropbox/catkin_ws/src/mara/"
 		
 		if 'l' in left_right:
@@ -118,6 +121,55 @@ class mara_serial():
 			command_r = 'jv ' + str(joint) + sign + str(vel) + '\r'
 			self.interface_r.write('jv ' + str(joint) + sign + str(vel) + '\r')
 
+	# command a single joint at 'vel' degrees per sec
+	def commandAllJointVelocities(self, vels, left_right='l'):
+		command_l = None
+		command_r = None
+		sign = '#'
+
+		cmd_str = ['0','0','0','0','0','0','0']
+
+		for j,v in vels.iteritems():
+			if j == 'j1':
+				idx = 0
+			elif j == 'j2':
+				idx = 1
+			elif j == 'j3':
+				idx = 2
+			elif j == 'j4':
+				idx = 3
+			elif j == 'j5':
+				idx = 4
+			elif j == 'j6':
+				idx = 5
+			elif j == 'g':
+				idx = 6
+
+			if v < 0:
+				if abs(v) <= 10:
+					cmd_str[idx] = 'A'
+				elif abs(v) <= 20:
+					cmd_str[idx] = 'B'
+				else:
+					cmd_str[idx] = 'C'
+			elif v > 0:
+				if abs(v) <= 10:
+					cmd_str[idx] = 'a'
+				elif abs(v) <= 20:
+					cmd_str[idx] = 'b'
+				else:
+					cmd_str[idx] = 'c'
+			else:
+				cmd_str[idx] = '0'
+
+		cmd_str = ''.join(cmd_str)
+		if 'l' in left_right and self.interface_l:
+			self.interface_l.write('m' + cmd_str + '\r')
+
+		if 'r' in left_right and self.interface_r:
+			self.interface_r.write('m' + cmd_str + '\r')
+
+
 	# send carriage return to stop arm movement
 	def stopMovement(self):
 		if 'l' in left_right and self.interface_l:
@@ -156,8 +208,8 @@ class mara_serial():
 
 		return new_vel
 
-	# attempts to command the joint to a desired angle at a certain velocity
-	def commandJointAngle(self, joint_name, angle, vel, left_right, variable_velocity=False):
+	# static velocity control
+	def commandJointAngle_STATIC(self, joint_name, angle, vel, left_right, variable_velocity=False):
 
 		l_angles, r_angles = self.getJointAngles(left_right=left_right)
 		rate = 0.01
@@ -204,14 +256,158 @@ class mara_serial():
 			self.commandJointVelocity(joint_name, 0, left_right=left_right)
 			print "DONE"
 
+	# PID control, attempts to command the joint to a desired angle at a certain velocity at a set interval
+	def commandAllJointAngles(self, angles, vels, left_right, variable_velocity=False):
+		
+		# command the left arm
+		if 'l' in left_right and self.interface_l:
+
+			l_angles, r_angles = self.getJointAngles(left_right=left_right)
+
+			lowers = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0} 		# upper range of stopping position
+			uppers = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}		# lower range of stopping position
+
+			measured_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+			zero_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0} 	# zero velocity commands to joints
+			cmd_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0} 		# high velocity commands to joints
+			stop_conditions = {'j1':False, 'j2':False, 'j3':False, 'j4':False, 'j5':False, 'j6':False, 'g':False}
+			duty_ratios = {'j1':0.0, 'j2':0.0, 'j3':0.0, 'j4':0.0, 'j5':0.0, 'j6':0.0, 'g':0.0}
+
+			# iterate through joints and set stopping range
+			for joint_name in angles.keys():
+				if 'g' in joint_name:
+					tolerance = 2.0
+					isGripper = True
+				else:
+					tolerance = 1.0
+					isGripper = False
+
+				# check if were moving clockwise or counterclockwise
+				vel = self.signVelocity(l_angles[joint_name], angles[joint_name], vels[joint_name], isGripper)
+
+				# set stopping tolerances
+				lower = angles[joint_name] - tolerance
+				upper = angles[joint_name] + tolerance
+
+				# evaluate stopping conditions for all joints
+				if lower < 0:
+					stop_condition = inRange(l_angles[joint_name], 360 + lower, 360) or inRange(l_angles[joint_name], 0, upper)
+				if upper > 360:
+					stop_condition = inRange(l_angles[joint_name], lower, 360) or inRange(l_angles[joint_name], 0, upper % 360)
+				else:
+					stop_condition = inRange(l_angles[joint_name], lower, upper)
+
+				# set duty cycles
+				if abs(vel) <= 10:
+					duty_ratio = (abs(vel)) / 10.0
+				elif abs(vel) <= 20:
+					duty_ratio = (abs(vel)) / 20.0
+				else:
+					duty_ratio = (abs(vel)) / 30.0
+
+				# set joint commands
+				# TODO: here is where pid comes in?
+				cmd_vels[joint_name] = vel
+				duty_ratios[joint_name] = duty_ratio
+				stop_conditions[joint_name] = stop_condition
+
+
+			period = 0.2
+			while not all(stop_conditions.values()):
+
+				print "STOP CONDIS", stop_conditions
+				print "CMD VELS", cmd_vels
+				print "DUTY RATIOS", duty_ratios
+
+				t1 = time.time()
+				l_angles_prev = l_angles 	# save old joint values
+
+				# send duty cycle
+				self.commandAllJointVelocities(cmd_vels, left_right=left_right)
+				t2 = time.time()
+				# place the sensor polling in duty pulse
+				l_angles, r_angles =  self.getJointAngles()
+				t3 = time.time()
+
+				while any(cmd_vels.values()):
+					t4 = time.time()
+					curr_duty = (t4 - t2) / period
+
+					# pull down PWM after duty cycle elapses
+					isChangedVel = False
+					for j,r in duty_ratios.iteritems():
+						if r < curr_duty and cmd_vels[j] != 0:
+							isChangedVel = True
+							cmd_vels[j] = 0
+					
+					if isChangedVel:
+						# low velocity command
+						self.commandAllJointVelocities(cmd_vels, left_right=left_right)
+						time.sleep(0.0001)
+
+				t5 = time.time()
+				# iterate through joints and set stopping range
+				for joint_name in angles.keys():
+					if 'g' in joint_name:
+						tolerance = 2.0
+						isGripper = True
+					else:
+						tolerance = 1.0
+						isGripper = False
+
+					measured_vel = (l_angles[joint_name] - l_angles_prev[joint_name]) / (t5-t1)
+					measured_vels[joint_name] = measured_vel
+
+					# check velocity command if we're moving clockwise or counterclockwise
+					vel = self.signVelocity(l_angles[joint_name], angles[joint_name], vels[joint_name], isGripper)
+
+					# set stopping tolerances
+					lower = angles[joint_name] - tolerance
+					upper = angles[joint_name] + tolerance
+
+					# evaluate stopping conditions for all joints
+					if lower < 0:
+						stop_condition = inRange(l_angles[joint_name], 360 + lower, 360) or inRange(l_angles[joint_name], 0, upper)
+					if upper > 360:
+						stop_condition = inRange(l_angles[joint_name], lower, 360) or inRange(l_angles[joint_name], 0, upper % 360)
+					else:
+						stop_condition = inRange(l_angles[joint_name], lower, upper)
+
+					# set duty cycles
+					if abs(vel) <= 10:
+						duty_ratio = (abs(vel)) / 10.0
+					elif abs(vel) <= 20:
+						duty_ratio = (abs(vel)) / 20.0
+					else:
+						duty_ratio = (abs(vel)) / 30.0
+
+
+
+					# set joint commands
+					# TODO: here is where pid comes in?
+					cmd_vels[joint_name] = vel
+					duty_ratios[joint_name] = duty_ratio
+					stop_conditions[joint_name] = stop_condition
+
+				
+
+				print "VELOCITIES", measured_vels
+				t6 = time.time()
+				t_wait = period - (t6 - t1)
+				time.sleep(max(t_wait, 0.0))
+				t7 = time.time()
+
+
+
+
 	def initializeGripper(self, left_right='l'):
 		self.commandJointVelocity(joint='g', vel=10, left_right=left_right)
 		# open the gripper a bit
 		print "Initializing", left_right, "gripper"
 		l_angles, r_angles = self.getJointAngles(left_right=left_right)
 
-		self.commandJointAngle('g', angle=30, vel=20, left_right=left_right)
-		self.commandJointAngle('g', angle=20, vel=20, left_right=left_right)
+		self.commandJointAngle_STATIC('g', angle=30, vel=20, left_right=left_right)
+		self.commandJointAngle_STATIC('g', angle=20, vel=20, left_right=left_right)
 
 		print "Done!"
 			
@@ -224,16 +420,16 @@ class mara_serial():
 		# iterate through joints from gripper to base and reset joint positions
 		for joint_name in self.orderedJoints:
 			print "Folding joint", joint_name
-			self.commandJointAngle(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
+			self.commandJointAngle_STATIC(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
 
 	def unfoldArm(self, left_right='l'):
-		desired_angles = {'g': 30, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 100, 'j3': 240}
+		desired_angles = {'g': 40, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 120, 'j3': 240}
 		vel_command = {'j1':10, 'j2':10, 'j3':10, 'j4':10, 'j5':10, 'j6':10, 'g':10}
 		
 		# iterate through joints from gripper to base and reset joint positions
 		for joint_name in self.orderedJoints:
 			print "Folding joint", joint_name
-			self.commandJointAngle(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
+			self.commandJointAngle_STATIC(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
 
 
 	def zeroArm(self, left_right='l'):
@@ -243,158 +439,51 @@ class mara_serial():
 		# iterate through joints from gripper to base and reset joint positions
 		for joint_name in self.orderedJoints:
 			print "Folding joint", joint_name
-			self.commandJointAngle(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
+			self.commandJointAngle_STATIC(joint_name, desired_angles[joint_name], vel_command[joint_name], left_right=left_right)
 		
 
-	def testVelocity(self, vel):
-		mara_serial.commandJointAngle('j1', 0, 10, left_right='l')
-		l_angles, r_angles =  mara_serial.getJointAngles()
+	def testVelocity(self, joint, angle, left_right='l'):
+		mara_serial.commandJointAngle(joint, angle, 10, left_right='l')
+		
 
-		fast_command = 10
-		period = 0.20
-		t_start = time.time()
-		while l_angles['j1'] < 30 or l_angles['j1'] > 300:
-			t1 = time.time()
-			if vel <= 5:
-				duty_ratio = vel / 10.0
-				fast_command = 10
-				slow_command = 0
-			elif vel <= 10:
-				duty_ratio = vel / 20.0
-				fast_command = 20
-				slow_command = 0
-			elif vel <= 20:
-				duty_ratio = vel / 20.0
-				fast_command = 20
-				slow_command = 10
-			else:
-				duty_ratio = vel / 30.0
-				fast_command = 30
-				slow_command = 20
-
-			print "Duty ratio", duty_ratio, 1-duty_ratio
-			print "Duty time", duty_ratio*period, "Off time", (1-duty_ratio)*period
-			self.commandJointVelocity('j1', vel=fast_command, left_right=left_right)
-			t3 = time.time()
-			# place the sensor polling in the larger part of the PWM pulse
-			if duty_ratio >= 0.5:
-				# poll the encoders and sleep for duty cycle
-				l_angles, r_angles =  mara_serial.getJointAngles()
-				t4 = time.time()
-				t_poll = (t4 - t3)
-				time.sleep( max((period * (duty_ratio) - t_poll), 0.0))
-			else:
-				# sleep the remaining period
-				time.sleep( max(((period) * (duty_ratio)), 0.0 ))
-
-			self.commandJointVelocity('j1', vel=slow_command, left_right=left_right)
-			t3 = time.time()
-			if duty_ratio < 0.5:
-				# poll the encoders and sleep for duty cycle
-				l_angles, r_angles =  mara_serial.getJointAngles()
-				t4 = time.time()
-				t_poll = (t4 - t3)
-				time.sleep( max((period * (1- duty_ratio) - t_poll), 0.0))
-			else:
-				# sleep the remaining period
-				time.sleep( max(((period) * (1-duty_ratio)), 0.0 ))
-
-			t2 = time.time()
-			print "Iteration:", t2 - t1, "secs"
-			print "Poll:", t_poll, "secs"
-			print "Total:", t2 - t_start, "secs"
-
-		mara_serial.commandJointVelocity('j1', 0, left_right='l')
-		l_angles, r_angles =  mara_serial.getJointAngles()
-		print l_angles
-
-	def moveWithError(self, joint, degrees, vel):
-	
-		l_angles, r_angles =  mara_serial.getJointAngles()
-
-		start_angles = l_angles
-		fast_command = 10
-		period = 0.20
-		t_start = time.time()
-		while l_angles[joint] < start_angles[joint] + degrees:
-			t1 = time.time()
-			if vel <= 5:
-				duty_ratio = vel / 10.0
-				fast_command = 10
-				slow_command = 0
-			elif vel <= 10:
-				duty_ratio = vel / 20.0
-				fast_command = 20
-				slow_command = 0
-			elif vel <= 20:
-				duty_ratio = vel / 20.0
-				fast_command = 20
-				slow_command = 10
-			else:
-				duty_ratio = vel / 30.0
-				fast_command = 30
-				slow_command = 20
-
-			#print "Duty ratio", duty_ratio, 1-duty_ratio
-			#print "Duty time", duty_ratio*period, "Off time", (1-duty_ratio)*period
-			self.commandJointVelocity(joint, vel=fast_command, left_right=left_right)
-			t3 = time.time()
-			# place the sensor polling in the larger part of the PWM pulse
-			if duty_ratio >= 0.5:
-				# poll the encoders and sleep for duty cycle
-				l_angles, r_angles =  mara_serial.getJointAngles()
-				t4 = time.time()
-				t_poll = (t4 - t3)
-				time.sleep( max((period * (duty_ratio) - t_poll), 0.0))
-			else:
-				# sleep the remaining period
-				time.sleep( max(((period) * (duty_ratio)), 0.0 ))
-
-			self.commandJointVelocity(joint, vel=slow_command, left_right=left_right)
-			t3 = time.time()
-			if duty_ratio < 0.5:
-				# poll the encoders and sleep for duty cycle
-				l_angles, r_angles =  mara_serial.getJointAngles()
-				t4 = time.time()
-				t_poll = (t4 - t3)
-				time.sleep( max((period * (1- duty_ratio) - t_poll), 0.0))
-			else:
-				# sleep the remaining period
-				time.sleep( max(((period) * (1-duty_ratio)), 0.0 ))
-
-			t2 = time.time()
-			#print "Iteration:", t2 - t1, "secs"
-			#print "Poll:", t_poll, "secs"
-			#print "Total:", t2 - t_start, "secs"
-
-		mara_serial.commandJointAngle(joint, start_angles[joint], 10, left_right='l')
-		mara_serial.commandJointVelocity(joint, 0, left_right='l')
-		return abs(l_angles[joint] - (start_angles[joint] + degrees)),  (degrees / (t2 - t_start)) - vel
 
 	# commands all joints through a series of movements to determine PID coefficients for accurate control
 	def calibrateController(self):
 		now = datetime.datetime.now()
-		calib_file = open(self.project_path + 'arm_calib_'+now.strftime("%m-%d-%Y")+'.txt', 'w')
+		calib_file = open(self.project_path + 'arm_calib_'+now.strftime("%m-%d-%Y")+'.txt', 'wa')
 
-		errors_pos = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
+		errors_pose = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
 		errors_vel = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
 
 		for joint in self.orderedJoints:
 			calib_file.write(str(joint)+'\n')
-			for vel in range(5,30):
-				error_pos, error_vel = self.moveWithError(joint, 20, vel)
-				errors_pos[joint].append(error_pos)
-				errors_vel[joint].append(error_vel)
-				calib_file.write(str(error_pos) + ", " + str(error_vel)+'\n')
+			for vel in range(1,30):
+				error_pose_pos, error_vel_pos = self.moveWithError(joint, 20, vel)
+				time.sleep(0.5)
+				error_pose_neg, error_vel_neg = self.moveWithError(joint, -20, -vel)
+				#errors_pose[joint].append(error_pose_pos)
+				#errors_vel[joint].append(error_vel)
+				calib_file.write(str(error_pose_pos) + ", " + str(error_pose_neg) + ", " + str(error_vel_pos) + ", " + str(error_vel_neg)+'\n')
+				calib_file.flush()
+				time.sleep(0.5)
 			calib_file.write('\n')
+
+
+	def loadCalibration(self, fname):
+		pass
 
 left_right = 'l'
 mara_serial = mara_serial(left_right=left_right)
 print mara_serial.getJointAngles()
 mara_serial.initializeGripper(left_right=left_right)
-mara_serial.unfoldArm(left_right=left_right)
-mara_serial.calibrateController()
+#mara_serial.unfoldArm(left_right=left_right)
+#mara_serial.calibrateController()
+#mara_serial.testVelocity( 'j1', 30, left_right=left_right)
 #print mara_serial.getJointAngles()
+
+desired_angles = {'g': 40, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 120, 'j3': 240}
+vel_commands = {'j1':5, 'j2':8, 'j3':6, 'j4':6, 'j5':7, 'j6':6, 'g':10}
+mara_serial.commandAllJointAngles(desired_angles, vel_commands, left_right, variable_velocity=False)
 
 #mara_serial.commandJointAngle('g', 60, 20, left_right='l')
 #mara_serial.testVelocity(30)
