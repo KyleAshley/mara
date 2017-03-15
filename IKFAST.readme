@@ -1,0 +1,13 @@
+as per: http://docs.ros.org/hydro/api/moveit_ikfast/html/doc/ikfast_tutorial.html
+
+# installed master branch of openrave
+# created urdf file using dummy measurements of mara
+# convert urdf to collada: 
+	$ rosrun collada_urdf urdf_to_collada <myrobot_name>.urdf <myrobot_name>.dae
+# round decimals on urdf file: 
+	$ rosrun moveit_ikfast round_collada_numbers.py <input_dae> <output_dae> <decimal places>
+# get end effector and base link numbers: 
+	$ /usr/bin/openrave-robot.py <myrobot_name>.dae --info links
+# generate IKFast solver:
+	 $ python `openrave-config --python-dir`/openravepy/_openravepy_/ikfast.py --robot=mara.dae --iktype=transform6d --baselink=0 --eelink=6 --savefile=ikfast_mara
+

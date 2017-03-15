@@ -210,7 +210,7 @@ class mara_serial():
 
 		return new_vel
 
-	# static velocity control
+	# static velocity control (only using 10, 20, or 30 deg per sec builtin commands)
 	def commandJointAngle_STATIC(self, joint_name, angle, vel, left_right, variable_velocity=False):
 
 		l_angles, r_angles = self.getJointAngles(left_right=left_right)
@@ -258,7 +258,7 @@ class mara_serial():
 			self.commandJointVelocity(joint_name, 0, left_right=left_right)
 			print "DONE"
 
-	# PID control, attempts to command the joint to a desired angle at a certain velocity at a set interval
+	# PWM control for all joints, commands joints to a specific position (blocking)
 	def commandAllJointAngles(self, angles, vels, left_right, variable_velocity=False):
 		
 		# command the left arm

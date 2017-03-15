@@ -121,7 +121,7 @@ include_directories(include)
 # add_dependencies(mara ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-add_executable(can src/can.cpp)
+#add_executable(can src/can.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
