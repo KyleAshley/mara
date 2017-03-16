@@ -334,7 +334,14 @@ class mara_serial():
 							# calculate goal pos and vel
 							goal_angles, goal_vels = {}, {}
 							for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
-								goal_vels[name] = (des - waypoint_angles[name]) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+
+								# calculate desired velocity accounting for wraparound
+								if (des - waypoint_angles[name]) < -180:
+									goal_vels[name] = (des - waypoint_angles[name] + 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+								elif (des - waypoint_angles[name]) > 180:
+									goal_vels[name] = (des - waypoint_angles[name] - 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+								else:
+									goal_vels[name] = (des - waypoint_angles[name]) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 								goal_angles[name] = des
 
 							#print "Current angles", angles
@@ -346,24 +353,37 @@ class mara_serial():
 							# for each joint calculate PD velocity commands
 							for joint_name in angles.keys():
 								# check if were moving clockwise or counterclockwise
-								#vel = self.signVelocity(angles[joint_name], goal_angles[joint_name], goal_vels[joint_name], isGripper=joint_name=='g')
 								vel = goal_vels[joint_name]
 								
 								# record a window of joint velocities
 								window_size = 1
-								velocity_windows[joint_name].append((angles[joint_name] - angles_prev[joint_name])/t_interval)
+
+								# calculate velocity accounting for wraparound in the positive and negative direction
+								if angles[joint_name] < 180 and angles_prev[joint_name] > 180 and goal_vels[joint_name] > 0:
+									delta_theta = angles[joint_name] - angles_prev[joint_name] + 360
+								elif angles[joint_name] > 180 and angles_prev[joint_name] < 180 and goal_vels[joint_name] < 0:
+									delta_theta = angles[joint_name] - angles_prev[joint_name] - 360
+								else:
+									delta_theta = angles[joint_name] - angles_prev[joint_name]
+
+								# record the instantaneous velocity ina  sliding window
+								velocity_windows[joint_name].append(delta_theta/t_interval)
 								if len(velocity_windows) > window_size:
 									velocity_windows[joint_name] = velocity_windows[joint_name][-window_size:]
 								
-								delta_theta = goal_angles[joint_name] - angles[joint_name]
+								err_theta = goal_angles[joint_name] - angles[joint_name]
 								#measured_vels[joint_name] = (angles[joint_name] - angles_prev[joint_name])/period 					# instantaneous measured vel
 								measured_vels[joint_name] = sum(velocity_windows[joint_name])/len(velocity_windows[joint_name]) 	# sliding window measured vel
-								delta_vel = goal_vels[joint_name] - measured_vels[joint_name]
+								err_vel = goal_vels[joint_name] - measured_vels[joint_name]
 
-								kp = 0.05
+								#print joint_name, 'angle', angles[joint_name], 'delta', delta_theta, 'goal', goal_vels[joint_name], 'actual', measured_vels[joint_name]
+
+								kp = 0.2
 								kd = 0.5
-								#pid_vel = vel + (kd * delta_vel)
 								pid_vel = vel
+								#pid_vel = vel * min((kp * abs(err_theta)), 1.0)
+
+								print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
 
 								# set duty cycles
 								if abs(pid_vel) <= 10:
@@ -378,7 +398,7 @@ class mara_serial():
 								cmd_vels[joint_name] = pid_vel
 								duty_ratios[joint_name] = min(duty_ratio, 1.0)
 
-								print "(actual, goal, duty):", joint_name, measured_vels[joint_name], goal_vels[joint_name], duty_ratios[joint_name]
+								#print "(actual, goal, duty):", joint_name, measured_vels[joint_name], goal_vels[joint_name], duty_ratios[joint_name]
 
 
 							# wait the period out if this is not the first command for a waypoint
@@ -420,7 +440,7 @@ class mara_serial():
 								if isChangedVel:
 									# low velocity command
 									self.commandAllJointVelocities(cmd_vels)
-									print 'duty', curr_duty, t4 - t2
+									#print 'duty', curr_duty, t4 - t2
 
 							t5 = time.time()
 							t_subdiv = time.time()
@@ -429,10 +449,20 @@ class mara_serial():
 						t_end_waypoint = time.time()
 
 						for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
-							print name, "Waypoint position error", angles[name] - des
+							delta = angles[name] - des
+							if delta < -180:
+								delta += 360
+							elif delta > 180:
+								delta -= 360
+							print name, "Waypoint position error", delta
 						
 						for name in curr_trajectory.joint_names:
-							print "Observed waypoint velocity", (angles[name] - waypoint_angles[name]) / (t_end_waypoint - t_waypoint)
+							delta = (angles[name] - waypoint_angles[name])
+							if delta < -180:
+								delta += 360
+							elif delta > 180:
+								delta -= 360
+							print "Observed waypoint velocity",  delta / (t_end_waypoint - t_waypoint)
 
 
 					# remove the trajectory from the queue
