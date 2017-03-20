@@ -12,6 +12,8 @@ from trajectory_msgs.msg import JointTrajectory
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
+import matplotlib.pyplot as plt
+import numpy as np
 # - implement a feedback loop for desired robot states using standard ros API
 
 # NOTES
@@ -308,6 +310,10 @@ class mara_serial():
 					t_start = time.time()
 					angles_prev = angles
 
+
+					positions_err_dict = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
+					velocities_err_dict = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
+
 					# iterate through waypoints in the trajectory
 					for waypoint in curr_trajectory.points:
 						t_subdiv = time.time() 			# subdivision of waypoint period at interval == PWM period
@@ -376,12 +382,14 @@ class mara_serial():
 								measured_vels[joint_name] = sum(velocity_windows[joint_name])/len(velocity_windows[joint_name]) 	# sliding window measured vel
 								err_vel = goal_vels[joint_name] - measured_vels[joint_name]
 
+								positions_err_dict[joint_name].append(angles[joint_name])
+								velocities_err_dict[joint_name].append(measured_vels[joint_name])
 								#print joint_name, 'angle', angles[joint_name], 'delta', delta_theta, 'goal', goal_vels[joint_name], 'actual', measured_vels[joint_name]
 
 								kp = 0.2
-								kd = 0.5
+								kd = 0.2
 								pid_vel = vel
-								#pid_vel = vel * min((kp * abs(err_theta)), 1.0)
+								pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
 
 								print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
 
@@ -467,6 +475,9 @@ class mara_serial():
 
 					# remove the trajectory from the queue
 					self.trajectory_queue = self.trajectory_queue[1:]
+					plt.plot(positions_err_dict['j1'])
+					plt.plot(velocities_err_dict['j1'])
+					plt.show()
 
 				# TODO: make this sleep the ROS rate
 				else:
