@@ -203,7 +203,7 @@ rospy.init_node('joint_angle_getter')
 mara_serial = mara_serial()
 mara_serial.initializeGripper()
 
-mara_serial.commandJointVelocity('j1', 10)
+mara_serial.commandJointVelocity('j5', 10)
 t1 = time.time()
 t2 = time.time()
 while t2 - t1 < 30:

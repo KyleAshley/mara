@@ -15,7 +15,7 @@
 		<visual>
 			<origin xyz="0 0 0.224" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".0687" length=".448"/>
+				<cylinder radius=".07125" length=".448"/>
 			</geometry>
 			<material name="Cyan1">
 					<color rgba="0 0.9 0.9 1.0"/>
@@ -25,9 +25,9 @@
 
 	<link name="link2" >
 		<visual>
-			<origin xyz="-0.38 0 0.205" rpy="0 0 0"/>
+			<origin xyz="0.0 0 0.205" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".03635" length=".41"/>
+				<cylinder radius=".04" length=".41"/>
 			</geometry>
 			<material name="Pink">
 					<color rgba="0.8 0.0 0.9 1.0"/>
@@ -37,9 +37,9 @@
 
 	<link name="link3" >
 		<visual>
-			<origin xyz="-.23 0 0.0912" rpy="3.14 0 0"/>
+			<origin xyz="0.0 0 0.076" rpy="3.14 0 0"/>
 			<geometry>
-				<cylinder radius=".03" length=".1824"/>
+				<cylinder radius=".03" length=".152"/>
 			</geometry>
 			<material name="White2">
 					<color rgba="1 0.9 0.9 1.0"/>
@@ -48,7 +48,7 @@
 	</link>
 	<link name="link4" >
 		<visual>
-			<origin xyz="0 0 0.106" rpy="0 0 0"/>
+			<origin xyz="0 0 0.076" rpy="0 0 0"/>
 			<geometry>
 				<cylinder radius=".03" length=".152"/>
 			</geometry>
@@ -59,9 +59,9 @@
 	</link>
 	<link name="link5" >
 		<visual>
-			<origin xyz="0 0 0.0381" rpy="0 0 0"/>
+			<origin xyz="0 0 0.025" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".02" length=".0762"/>
+				<cylinder radius=".02" length=".05"/>
 			</geometry>
 			<material name="Blue1">
 					<color rgba="0.0 0.2 0.9 0"/>
@@ -70,7 +70,7 @@
 	</link>
 	<link name="link6" >
 		<visual>
-			<origin xyz="0 0 .025" rpy="0 1.57 0"/>
+			<origin xyz="0 0 0" rpy="0 1.57 0"/>
 			<geometry>
 				<cylinder radius=".016" length=".05"/>
 			</geometry>
@@ -83,7 +83,7 @@
 	<joint name="joint1" type="continuous">
 		<parent link="base_link"/>
 		<child link="link1"/>
-		<origin xyz="0 0 0" rpy="0 0 -1.57"/>
+		<origin xyz="0 0 0" rpy="0 0 -0.785"/>
                 <axis xyz="0 0 1" />
 	</joint>
 
@@ -97,29 +97,28 @@
 	<joint name="joint3" type="continuous">
 		<parent link="link2"/>
 		<child link="link3"/>
-		<origin xyz="-0.08 0 0.41" rpy="3.14 0 0"/>
+		<origin xyz="-0.08 0 0.41" rpy="3.14 0 3.14"/>
                 <axis xyz="1 0 0" />
 	</joint>
 
 	<joint name="joint4" type="continuous">
 		<parent link="link3"/>
 		<child link="link4"/>
-		<origin xyz="-0.23 0 0.152" rpy="0 0 1.57"/>
+		<origin xyz="0.00 0 0.152" rpy="0 0 0"/>
                 <axis xyz="0 0 1" />
 	</joint>
 
 	<joint name="joint5" type="continuous">
 		<parent link="link4"/>
 		<child link="link5"/>
-		<origin xyz="0 0.0 0.152" rpy="-3.14 0 1.57"/>
+		<origin xyz="0 0.0 0.152" rpy="0 0 0"/>
                 <axis xyz="0 1 0" />
-        <limit effort="30" velocity="0.6" lower="0.0" upper="2.6" />
 	</joint>
 
 	<joint name="joint6" type="continuous">
 		<parent link="link5"/>
 		<child link="link6"/>
-		<origin xyz="0 0.0 0.05" rpy="0 0 3.14"/>
+		<origin xyz="0 0.0 0.05" rpy="0 0 0"/>
                 <axis xyz="0 0 1" />
 	</joint>
 </robot>

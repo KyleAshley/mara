@@ -5,12 +5,14 @@ import sys, time, os
 import rospy
 from mara_utils import *
 import datetime
+import math 
 
 import moveit_msgs.msg
 import geometry_msgs.msg
 from trajectory_msgs.msg import JointTrajectory
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
+from moveit_msgs.msg import MoveGroupActionResult
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +27,7 @@ import numpy as np
 
 class mara_serial():
 	def __init__(self, left_right='lr'):
-		self.device = "/dev/ttyUSB0" 	# linux device name for serial interface
+		self.device = "/dev/ttyUSB1" 	# linux device name for serial interface
 		self.interface = None 			# python serial interface
 
 		self.rate = 0.3
@@ -44,6 +46,7 @@ class mara_serial():
 
 		# ros subs and pubs
 		self.trajectory_sub = rospy.Subscriber('/mara/left_arm/joint_trajectory_controller/trajectory', JointTrajectory, self.updateJointTrajectory)
+		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory)
 
 		self.joint_state_pub = rospy.Publisher('/mara/left_arm/joint_positions', JointState)
 
@@ -85,6 +88,13 @@ class mara_serial():
 					val = val - 54801
 					joint_angles[key] =  val * float(encoder_ratio)
 
+
+		# sets virtual zero position for joints to a logical place
+		#joint_angles['j3'] -= 111.297469362
+		#if joint_angles['j3'] < 0:
+		#	joint_angles['j3'] += 360
+
+
 		if verbose:
 			rospy.loginfo("Joint angles received " + str(joint_angles))
 
@@ -99,12 +109,14 @@ class mara_serial():
 			if len(self.joint_array) != 0:
 				# convert hex response to joint angles
 				self.joint_angles = self.decodeJointValues(self.joint_array)
+				self.joint_angles['j3'] = self.joint_angles['j3'] - self.joint_angles['j2'] 		# offset linked encoders
+
 			else:
 				print "Warning: failed to receive joint state from left arm"
 
 		return self.joint_angles
 
-	# command a single joint at 'vel' degrees per sec
+	# command a single joint at 'vel' degrees per sec using the 'jv' command
 	def commandJointVelocity(self, joint, vel):
 		command = None
 		sign = '#'
@@ -117,7 +129,7 @@ class mara_serial():
 			self.interface.write('jv ' + str(joint) + sign + str(vel) + '\r')
 
 
-	# command a single joint at 'vel' degrees per sec
+	# command a single joint at 'vel' degrees per sec using the 'm' command
 	def commandAllJointVelocities(self, vels, left_right='l'):
 		command = None
 		sign = '#'
@@ -257,12 +269,65 @@ class mara_serial():
 
 		print "Done!"
 
+	# scale velocity down to < 30 deg/s
+	def enforceMaxTrajectoryVelocity(self, trajectory):
+		
+		print trajectory.points
+
+		limitExceeded = True
+
+		while(limitExceeded):
+			limitExceeded = False
+			# iterate over points and joint names
+			for p1 in trajectory.points:
+				for n in range(len(trajectory.joint_names)):
+					# if the velocity threshold is exceeded, double the timestamps
+					if p1.velocities[n] > 0.3 or p1.velocities[n] < -0.3:
+						for p2 in trajectory.points:
+							p2.time_from_start *= 2
+							new_vels = []
+							for i in range(len(p2.velocities)):
+								new_vels.append(p2.velocities[i] / 2)
+							p2.velocities = new_vels
+
+						limitExceeded = True
+					if limitExceeded:
+						break
+				if limitExceeded:
+					break
+			
+		for p1 in trajectory.points:
+			new_positions = []
+			for n in range(len(trajectory.joint_names)):
+				angle = p1.positions[n] * (180.0/math.pi)
+				new_positions.append(angle + 180)
+			p1.positions = new_positions
+			print p1.positions
+
+		new_trajectory = trajectory
+		return new_trajectory
+
+
+
 
 	# update the trajectory queue with new goals from ROS sub
 	def updateJointTrajectory(self, msg):
-
 		print 'Received new joint trajectory'
 		self.trajectory_queue.append(msg)
+		self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
+
+	def updateMoveitTrajectory(self, msg):
+		print 'Received new RVIZ joint trajectory'
+		trajectory = msg.result.planned_trajectory.joint_trajectory
+		short_names = {'joint1':'j1', 'joint2':'j2', 'joint3':'j3', 'joint4':'j4', 'joint5':'j5', 'joint6':'j6', 'gripper':'g'}
+		new_names = []
+		for n in trajectory.joint_names:
+			new_names.append(short_names[n])
+		trajectory.joint_names = new_names
+
+		trajectory = self.enforceMaxTrajectoryVelocity(trajectory)
+
+		self.trajectory_queue.append(trajectory)
 		self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
 
@@ -272,11 +337,13 @@ class mara_serial():
 		msg.header = Header()
 		msg.header.stamp = rospy.Time.now()
 
+		full_names = {'j1':'joint1', 'j2':'joint2', 'j3':'joint3', 'j4':'joint4', 'j5':'joint5', 'j6':'joint6', 'g':'gripper'}
 		names = []
 		positions = []
 		for name, theta in angles.iteritems():
-			names.append(name)
-			positions.append(theta)
+			names.append(full_names[name])
+			#positions.append(0)
+			positions.append((theta - 180.0) * (math.pi/180.0))
 
 		msg.name = names
 		msg.position = positions
@@ -350,14 +417,14 @@ class mara_serial():
 									goal_vels[name] = (des - waypoint_angles[name]) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 								goal_angles[name] = des
 
-							#print "Current angles", angles
-							#print "Goal angles", goal_angles
-							#print "Goal vels", goal_vels
-							#print "Starting pos", waypoint_angles
-							#print "time", ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+							print "Current angles", angles
+							print "Goal angles", goal_angles
+							print "Goal vels", goal_vels
+							print "Starting pos", waypoint_angles
+							print "time", ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 
 							# for each joint calculate PD velocity commands
-							for joint_name in angles.keys():
+							for joint_name in curr_trajectory.joint_names:
 								# check if were moving clockwise or counterclockwise
 								vel = goal_vels[joint_name]
 								
@@ -389,7 +456,7 @@ class mara_serial():
 								kp = 0.2
 								kd = 0.2
 								pid_vel = vel
-								pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
+								#pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
 
 								print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
 
@@ -402,7 +469,6 @@ class mara_serial():
 									duty_ratio = (abs(pid_vel)) / 30.0
 
 								# set joint commands
-								# TODO: here is where pid comes in?
 								cmd_vels[joint_name] = pid_vel
 								duty_ratios[joint_name] = min(duty_ratio, 1.0)
 
@@ -475,8 +541,12 @@ class mara_serial():
 
 					# remove the trajectory from the queue
 					self.trajectory_queue = self.trajectory_queue[1:]
-					plt.plot(positions_err_dict['j1'])
-					plt.plot(velocities_err_dict['j1'])
+					plt.plot(positions_err_dict['j1'], 'b')
+					plt.plot(positions_err_dict['j2'], 'r')
+					plt.plot(positions_err_dict['j3'], 'm')
+					plt.plot(positions_err_dict['j4'], 'g')
+					plt.plot(positions_err_dict['j5'], 'k')
+					plt.plot(positions_err_dict['j6'], 'y')
 					plt.show()
 
 				# TODO: make this sleep the ROS rate

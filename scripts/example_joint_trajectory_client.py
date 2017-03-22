@@ -12,7 +12,11 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
+import moveit_commander
+import moveit_msgs.msg
 
+"""
+# BELOW: waits for joint position feedback on ROS topic, executes a static trajectory from that position
 positions = None
 names = None
 flag = False
@@ -34,9 +38,6 @@ joint_pos_sub = rospy.Subscriber('/mara/left_arm/joint_positions', JointState, u
 while not flag:
 	rospy.sleep(1.0)
 	print "waiting for current positions..."
-
-
-
 
 
 msg = JointTrajectory()
@@ -102,10 +103,6 @@ for p in pl:
 	for i in range(len(p.positions)):
 		p.positions[i] = p.positions[i]%360
 
-
-
-
-
 msg.points = pl
 
 print msg.points
@@ -114,3 +111,29 @@ print msg.joint_names
 #joint_trajectory_pub.publish(msg)
 
 joint_trajectory_pub.publish(msg)
+"""
+
+
+
+robot = moveit_commander.RobotCommander()
+scene = moveit_commander.PlanningSceneInterface()
+group = moveit_commander.MoveGroupCommander("left_arm")
+display_trajectory_publisher = rospy.Publisher(
+                                    '/move_group/display_planned_path',
+                                    moveit_msgs.msg.DisplayTrajectory)
+# wait for rviz to launch
+rospy.sleep(10)
+
+
+# create the path
+pose_target = geometry_msgs.msg.Pose()
+pose_target.orientation.w = 1.0
+pose_target.position.x = -0.3
+pose_target.position.y = -0.4
+pose_target.position.z = 0.6
+group.set_pose_target(pose_target)
+
+plan = group.plan()
+joint_trajectory_pub.publish(plan)
+print plan
+
