@@ -2,10 +2,12 @@
 import serial
 import cv2
 import sys, time, os
+from subprocess import call
 import rospy
 from mara_utils import *
 import datetime
 import math 
+import stat
 
 import moveit_msgs.msg
 import geometry_msgs.msg
@@ -16,7 +18,7 @@ from moveit_msgs.msg import MoveGroupActionResult
 
 import matplotlib.pyplot as plt
 import numpy as np
-# - implement a feedback loop for desired robot states using standard ros API
+
 
 # NOTES
 # - On startup:
@@ -27,10 +29,36 @@ import numpy as np
 
 class mara_serial():
 	def __init__(self, left_right='lr'):
-		self.device = "/dev/ttyUSB1" 	# linux device name for serial interface
+
+		self.isInitialized = False
 		self.interface = None 			# python serial interface
 
-		self.rate = 0.3
+		device_list = self.getUSBDeviceNames()
+		self.device = device_list[0] 					# linux device name for serial interface
+		call(["sudo", "chmod", "+777", self.device]) 	# give permissions to access device file
+
+		# open the serial interface to the arm
+		try:
+			self.interface = serial.Serial(self.device, 9600, timeout=0.1)
+			self.isInitialized = True
+		except:
+			print("Could not open usb interface for left arm on: \t ---> \t" + str(self.device))
+			print "Attempting to load the kernel module..."
+			os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
+
+			try:
+				print ("Opening mara control for left arm on: \t \t ---> \t" + str(self.interface.name))
+				self.interface = serial.Serial(self.device, 9600, timeout=0.1)
+				self.isInitialized = True
+
+			except Exception, e:
+				print "Failed...exiting"
+				self.isInitialized = False
+
+
+	
+
+		self.rate = 0.3 				# pulse width period for sending joint commands through USB  (Dont change it)
 
 		# serial communication results
 		self.joint_array = None 	# most recent hex array from encoders
@@ -48,16 +76,24 @@ class mara_serial():
 		self.trajectory_sub = rospy.Subscriber('/mara/left_arm/joint_trajectory_controller/trajectory', JointTrajectory, self.updateJointTrajectory)
 		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory)
 
-		self.joint_state_pub = rospy.Publisher('/mara/left_arm/joint_positions', JointState)
+		self.joint_state_pub = rospy.Publisher('/mara/left_arm/joint_positions', JointState, queue_size=1)
 
-	
 		
-		# open the serial interface to the arm
-		try:
-			self.interface = serial.Serial(self.device, 9600, timeout=0.1)
-			print ("Opening mara control for left arm on: \t \t ---> \t" + str(self.interface.name))
-		except Exception,e:
-			print("Could not open usb interface for left arm on: \t ---> \t" + str(self.device))
+			
+
+
+	# looks for USB devices on /dev, returns a list of stings containing the device names
+	def getUSBDeviceNames(self):
+		devices = []
+		for i in range(10):
+			path = "/dev/ttyUSB" + str(i)
+			try:
+				if os.path.exists(path):
+					devices.append(path)
+			except:
+				pass
+
+		return devices
 
 
 	# decodes hex response from serial query for joint values
@@ -87,13 +123,6 @@ class mara_serial():
 				else:
 					val = val - 54801
 					joint_angles[key] =  val * float(encoder_ratio)
-
-
-		# sets virtual zero position for joints to a logical place
-		#joint_angles['j3'] -= 111.297469362
-		#if joint_angles['j3'] < 0:
-		#	joint_angles['j3'] += 360
-
 
 		if verbose:
 			rospy.loginfo("Joint angles received " + str(joint_angles))
@@ -282,7 +311,7 @@ class mara_serial():
 			for p1 in trajectory.points:
 				for n in range(len(trajectory.joint_names)):
 					# if the velocity threshold is exceeded, double the timestamps
-					if p1.velocities[n] > 0.3 or p1.velocities[n] < -0.3:
+					if p1.velocities[n] > 0.2 or p1.velocities[n] < -0.2:
 						for p2 in trajectory.points:
 							p2.time_from_start *= 2
 							new_vels = []
@@ -316,6 +345,7 @@ class mara_serial():
 		self.trajectory_queue.append(msg)
 		self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
+	# receives trajectories from the moveit topic and adds them to the execution queue
 	def updateMoveitTrajectory(self, msg):
 		print 'Received new RVIZ joint trajectory'
 		trajectory = msg.result.planned_trajectory.joint_trajectory
@@ -352,7 +382,10 @@ class mara_serial():
 
 
 	# main control loop
-	# - obtain joint positions and publish to /mara/<arm>/joint_positions/<joint_name>
+	# - obtains joint positions and publishes to:	 /mara/<arm>/joint_positions/<joint_name>
+	# - accepts trajectories from:					 /move_group/goal  	(TODO: needs to change?)
+	# - executes joint trajectories using PD control loop
+	# - TODO: add joint limits
 	def startJointTrajectoryControlLoop(self):
 		
 		if self.interface:
@@ -408,7 +441,7 @@ class mara_serial():
 							goal_angles, goal_vels = {}, {}
 							for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
 
-								# calculate desired velocity accounting for wraparound
+								# calculate desired joint velocity accounting for wraparound
 								if (des - waypoint_angles[name]) < -180:
 									goal_vels[name] = (des - waypoint_angles[name] + 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 								elif (des - waypoint_angles[name]) > 180:
@@ -522,6 +555,7 @@ class mara_serial():
 
 						t_end_waypoint = time.time()
 
+						# print the errors
 						for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
 							delta = angles[name] - des
 							if delta < -180:
@@ -541,6 +575,8 @@ class mara_serial():
 
 					# remove the trajectory from the queue
 					self.trajectory_queue = self.trajectory_queue[1:]
+
+					# plot errors
 					plt.plot(positions_err_dict['j1'], 'b')
 					plt.plot(positions_err_dict['j2'], 'r')
 					plt.plot(positions_err_dict['j3'], 'm')
@@ -567,42 +603,15 @@ class mara_serial():
 
 
 
-
-
-							
-
-
-
-
-			
-
-
-
-rospy.init_node('joint_trajectory_controller')
-
+success = rospy.init_node('joint_trajectory_controller')
 mara_serial = mara_serial()
-mara_serial.initializeGripper()
-#mara_serial.unfoldArm(left_right=left_right)
-#mara_serial.calibrateController()
-#mara_serial.testVelocity( 'j1', 30, left_right=left_right)
-#print mara_serial.getJointAngles()
 
-#desired_angles = {'g': 40, 'j4': 180, 'j5': 90, 'j6': 120, 'j1': 40, 'j2': 140, 'j3': 270}
-#vel_commands = {'j1':0, 'j2':0, 'j3':5, 'j4':0, 'j5':0, 'j6':0, 'g':0}
-#mara_serial.commandAllJointAngles(desired_angles, vel_commands, left_right, )
+if mara_serial.isInitialized:
+	mara_serial.initializeGripper()
+	mara_serial.startJointTrajectoryControlLoop()
 
-mara_serial.startJointTrajectoryControlLoop()
+	rospy.spin()
 
-#mara_serial.commandJointAngle('g', 60, 20, left_right='l')
-#mara_serial.testVelocity(30)
-#mara_serial.foldArm(left_right=left_right)
-#mara_serial.zeroArm(left_right=left_right)
-
-# how fast to query joint angles via usb
-rospy.spin()
-# joint velocities in degrees per second
-#vel = {'j1':1, 'j2':0, 'j3':1, 'j4':0, 'j5':1, 'j6':0, 'g':1}
-#mara_serial.commandJointVelocity
 
 
 
