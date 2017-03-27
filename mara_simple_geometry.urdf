@@ -15,7 +15,7 @@
 		<visual>
 			<origin xyz="0 0 0.224" rpy="0 0 0"/>
 			<geometry>
-				<mesh filename="package://mara/models/MARA_base.dae" scale="0.001 0.001 0.001"/>
+				<cylinder radius=".0687" length=".448"/>
 			</geometry>
 			<material name="Cyan1">
 					<color rgba="0 0.9 0.9 1.0"/>
@@ -27,7 +27,7 @@
 		<visual>
 			<origin xyz="-0.38 0 0.205" rpy="0 0 0"/>
 			<geometry>
-				<mesh filename="package://mara/models/MARA_arm_1.dae" scale="0.001 0.001 0.001"/>
+				<cylinder radius=".03635" length=".41"/>
 			</geometry>
 			<material name="Pink">
 					<color rgba="0.8 0.0 0.9 1.0"/>
@@ -39,7 +39,7 @@
 		<visual>
 			<origin xyz="-.23 0 0.0912" rpy="3.14 0 0"/>
 			<geometry>
-				<mesh filename="package://mara/models/MARA_arm_2.dae" scale="0.001 0.001 0.001"/>
+				<cylinder radius=".03" length=".1824"/>
 			</geometry>
 			<material name="White2">
 					<color rgba="1 0.9 0.9 1.0"/>
@@ -50,7 +50,7 @@
 		<visual>
 			<origin xyz="0 0 0.106" rpy="0 0 0"/>
 			<geometry>
-				<mesh filename="package://mara/models/MARA_wrist.dae" scale="0.001 0.001 0.001"/>
+				<cylinder radius=".03" length=".152"/>
 			</geometry>
 			<material name="White3">
 					<color rgba="1 0.0 0.0 1"/>
@@ -59,9 +59,9 @@
 	</link>
 	<link name="link5" >
 		<visual>
-			<origin xyz="0 0 0.01425" rpy="0 0 0"/>
+			<origin xyz="0 0 0.0381" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".015" length=".0285"/>
+				<cylinder radius=".02" length=".0762"/>
 			</geometry>
 			<material name="Blue1">
 					<color rgba="0.0 0.2 0.9 0"/>
@@ -72,7 +72,7 @@
 		<visual>
 			<origin xyz="0 0 .025" rpy="0 1.57 0"/>
 			<geometry>
-				<mesh filename="package://mara/models/MARA_gripper_base.dae" scale="0.001 0.001 0.001"/>
+				<cylinder radius=".016" length=".05"/>
 			</geometry>
 			<material name="Blue2">
 					<color rgba="0.0 1 0.9 0"/>
@@ -91,7 +91,7 @@
 	<joint name="joint2" type="continuous">
 		<parent link="link1"/>
 		<child link="link2"/>
-		<origin xyz="0.2 0.0 0.446" rpy="1.57 0 0"/>
+		<origin xyz="0.2 0.0 0.448" rpy="1.57 0 0"/>
                 <axis xyz="1 0 0" />
 		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
 	</joint>
@@ -107,7 +107,7 @@
 	<joint name="joint4" type="continuous">
 		<parent link="link3"/>
 		<child link="link4"/>
-		<origin xyz="-0.226 0.0 0.152" rpy="0 0 1.57"/>
+		<origin xyz="-0.23 0 0.152" rpy="0 0 1.57"/>
                 <axis xyz="0 0 1" />
 		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
 	</joint>
@@ -115,7 +115,7 @@
 	<joint name="joint5" type="continuous">
 		<parent link="link4"/>
 		<child link="link5"/>
-		<origin xyz="0 0.0 0.183" rpy="-3.14 0 1.57"/>
+		<origin xyz="0 0.0 0.152" rpy="-3.14 0 1.57"/>
                 <axis xyz="0 1 0" />
         	<limit effort="30" velocity="0.6" lower="0.0" upper="2.6" />
 	</joint>
@@ -123,7 +123,7 @@
 	<joint name="joint6" type="continuous">
 		<parent link="link5"/>
 		<child link="link6"/>
-		<origin xyz="0 0.0 0.005" rpy="0 0 3.14"/>
+		<origin xyz="0 0.0 0.05" rpy="0 0 3.14"/>
                 <axis xyz="0 0 1" />
 		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
 	</joint>

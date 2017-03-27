@@ -80,8 +80,6 @@ class mara_serial():
 
 		
 			
-
-
 	# looks for USB devices on /dev, returns a list of stings containing the device names
 	def getUSBDeviceNames(self):
 		devices = []
@@ -92,7 +90,6 @@ class mara_serial():
 					devices.append(path)
 			except:
 				pass
-
 		return devices
 
 
@@ -135,13 +132,19 @@ class mara_serial():
 			# send command to get left arm joint angles
 			self.interface.write('p\r')
 			self.joint_array = self.interface.read(29)
-			if len(self.joint_array) != 0:
+
+			if len(self.joint_array) != 0 and ">Stop" not in str(self.joint_array):
 				# convert hex response to joint angles
 				self.joint_angles = self.decodeJointValues(self.joint_array)
 				self.joint_angles['j3'] = self.joint_angles['j3'] - self.joint_angles['j2'] 		# offset linked encoders
+				if self.joint_angles['j3'] < 0:
+					self.joint_angles['j3'] += 360
 
 			else:
-				print "Warning: failed to receive joint state from left arm"
+				if ">Stop" in str(self.joint_array):
+					print "Warning: joints near singularity..."
+				else:
+					print "Warning: failed to receive joint state from left arm"
 
 		return self.joint_angles
 
@@ -329,7 +332,12 @@ class mara_serial():
 			new_positions = []
 			for n in range(len(trajectory.joint_names)):
 				angle = p1.positions[n] * (180.0/math.pi)
-				new_positions.append(angle + 180)
+				angle = angle + 180 			# weird offset required for some reason
+				if angle < 0:
+					angle = angle + 360
+				elif angle > 360:
+					angle = angle % 360
+				new_positions.append(angle)
 			p1.positions = new_positions
 			print p1.positions
 
@@ -467,29 +475,31 @@ class mara_serial():
 								# calculate velocity accounting for wraparound in the positive and negative direction
 								if angles[joint_name] < 180 and angles_prev[joint_name] > 180 and goal_vels[joint_name] > 0:
 									delta_theta = angles[joint_name] - angles_prev[joint_name] + 360
+									err_theta = goal_angles[joint_name] - angles[joint_name] + 360
 								elif angles[joint_name] > 180 and angles_prev[joint_name] < 180 and goal_vels[joint_name] < 0:
 									delta_theta = angles[joint_name] - angles_prev[joint_name] - 360
+									err_theta = goal_angles[joint_name] - angles[joint_name] - 360
 								else:
 									delta_theta = angles[joint_name] - angles_prev[joint_name]
+									err_theta = goal_angles[joint_name] - angles[joint_name]
 
 								# record the instantaneous velocity ina  sliding window
 								velocity_windows[joint_name].append(delta_theta/t_interval)
 								if len(velocity_windows) > window_size:
 									velocity_windows[joint_name] = velocity_windows[joint_name][-window_size:]
 								
-								err_theta = goal_angles[joint_name] - angles[joint_name]
 								#measured_vels[joint_name] = (angles[joint_name] - angles_prev[joint_name])/period 					# instantaneous measured vel
 								measured_vels[joint_name] = sum(velocity_windows[joint_name])/len(velocity_windows[joint_name]) 	# sliding window measured vel
 								err_vel = goal_vels[joint_name] - measured_vels[joint_name]
 
-								positions_err_dict[joint_name].append(angles[joint_name])
-								velocities_err_dict[joint_name].append(measured_vels[joint_name])
+								positions_err_dict[joint_name].append(err_theta)
 								#print joint_name, 'angle', angles[joint_name], 'delta', delta_theta, 'goal', goal_vels[joint_name], 'actual', measured_vels[joint_name]
 
 								kp = 0.2
 								kd = 0.2
-								pid_vel = vel
+								#pid_vel = vel
 								#pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
+								pid_vel = vel + (kd * err_vel)
 
 								print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
 
@@ -585,16 +595,13 @@ class mara_serial():
 					plt.plot(positions_err_dict['j6'], 'y')
 					plt.show()
 
-				# TODO: make this sleep the ROS rate
+				# no trajectory in queue
 				else:
-
 					rospy.sleep(self.rate)
-
-
-
-
-			else:
-				pass
+					
+		# no serial interface initialized
+		else:
+			pass
 
 
 
