@@ -14,10 +14,12 @@ import geometry_msgs.msg
 from trajectory_msgs.msg import JointTrajectory
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
-from moveit_msgs.msg import MoveGroupActionResult
+from moveit_msgs.msg import MoveGroupActionResult, ExecuteTrajectoryActionResult
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+import threading
 
 
 # NOTES
@@ -28,26 +30,31 @@ import numpy as np
 # - $ sudo modprobe usbserial vendor=0x067b product=0x2303 
 
 class mara_serial():
-	def __init__(self, left_right='lr'):
+	def __init__(self, device_num=None, left_right='l'):
 
 		self.isInitialized = False
 		self.interface = None 			# python serial interface
 
 		device_list = self.getUSBDeviceNames()
-		self.device = device_list[0] 					# linux device name for serial interface
-		call(["sudo", "chmod", "+777", self.device]) 	# give permissions to access device file
+		if device_num == None:
+			self.device_name = device_list[0] 					# linux device name for serial interface
+		else:
+			self.device_name = device_list[device_num] 					# linux device name for serial interface
+
+		call(["sudo", "chmod", "+777", self.device_name]) 	# give permissions to access device file
 
 		# open the serial interface to the arm
 		try:
-			self.interface = serial.Serial(self.device, 9600, timeout=0.1)
+			self.interface = serial.Serial(self.device_name, 9600, timeout=0.1)
+			print self.interface.name
 			self.isInitialized = True
 		except:
-			print("Could not open usb interface for left arm on: \t ---> \t" + str(self.device))
+			print("Could not open usb interface for left arm on: \t ---> \t" + str(self.device_name))
 			print "Attempting to load the kernel module..."
 			os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
 
 			try:
-				print ("Opening mara control for left arm on: \t \t ---> \t" + str(self.interface.name))
+				print ("Opening mara control on: \t \t ---> \t" + str(self.interface.name))
 				self.interface = serial.Serial(self.device, 9600, timeout=0.1)
 				self.isInitialized = True
 
@@ -55,10 +62,15 @@ class mara_serial():
 				print "Failed...exiting"
 				self.isInitialized = False
 
+		# need a better method here
+		if 'r' in left_right:
+			self.arm_name = "right"
+		else:
+			self.arm_name = "left"
 
-	
+		print "Initializing", self.arm_name, "arm..."
 
-		self.rate = 0.3 				# pulse width period for sending joint commands through USB  (Dont change it)
+		self.rate = 0.2 				# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
 
 		# serial communication results
 		self.joint_array = None 	# most recent hex array from encoders
@@ -73,10 +85,13 @@ class mara_serial():
 		self.project_path = "/home/carrt/Dropbox/catkin_ws/src/mara/"
 
 		# ros subs and pubs
-		self.trajectory_sub = rospy.Subscriber('/mara/left_arm/joint_trajectory_controller/trajectory', JointTrajectory, self.updateJointTrajectory)
-		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory)
+		self.trajectory_sub = rospy.Subscriber("/mara/joint_trajectory_controller/trajectory", JointTrajectory, self.updateJointTrajectory)
+		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory, queue_size=4)
 
-		self.joint_state_pub = rospy.Publisher('/mara/left_arm/joint_positions', JointState, queue_size=1)
+		self.joint_state_pub = rospy.Publisher("/mara/joint_positions", JointState, queue_size=2)
+		self.rviz_joint_state_pub = rospy.Publisher('/move_group/fake_controller_joint_states', JointState, queue_size=1)
+
+		self.trajectory_result_pub = rospy.Publisher('/execute_trajectory/result', ExecuteTrajectoryActionResult, queue_size=1)
 
 		
 			
@@ -290,10 +305,9 @@ class mara_serial():
 
 
 	# getst the gripper in a good starting position after powering the arm
-	def initializeGripper(self, left_right='l'):
+	def initializeGripper(self):
 		self.commandJointVelocity(joint='g', vel=10)
 		# open the gripper a bit
-		print "Initializing", left_right, "gripper"
 		angles = self.getJointAngles()
 
 		self.commandJointAngle_STATIC('g', angle=30, vel=20)
@@ -314,7 +328,7 @@ class mara_serial():
 			for p1 in trajectory.points:
 				for n in range(len(trajectory.joint_names)):
 					# if the velocity threshold is exceeded, double the timestamps
-					if p1.velocities[n] > 0.2 or p1.velocities[n] < -0.2:
+					if p1.velocities[n] > 0.3 or p1.velocities[n] < -0.3:
 						for p2 in trajectory.points:
 							p2.time_from_start *= 2
 							new_vels = []
@@ -350,23 +364,27 @@ class mara_serial():
 	# update the trajectory queue with new goals from ROS sub
 	def updateJointTrajectory(self, msg):
 		print 'Received new joint trajectory'
-		self.trajectory_queue.append(msg)
-		self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
+		#self.trajectory_queue.append(msg)
+		#self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
 	# receives trajectories from the moveit topic and adds them to the execution queue
 	def updateMoveitTrajectory(self, msg):
-		print 'Received new RVIZ joint trajectory'
-		trajectory = msg.result.planned_trajectory.joint_trajectory
-		short_names = {'joint1':'j1', 'joint2':'j2', 'joint3':'j3', 'joint4':'j4', 'joint5':'j5', 'joint6':'j6', 'gripper':'g'}
-		new_names = []
-		for n in trajectory.joint_names:
-			new_names.append(short_names[n])
-		trajectory.joint_names = new_names
+		if self.arm_name in msg.result.planned_trajectory.joint_trajectory.joint_names[0]:
+			print 'Received new RVIZ joint trajectory for', self.arm_name 
+			trajectory = msg.result.planned_trajectory.joint_trajectory
+			short_names = {'joint1':'j1', 'joint2':'j2', 'joint3':'j3', 'joint4':'j4', 'joint5':'j5', 'joint6':'j6', 'gripper':'g'}
+			new_names = []
+			for n in trajectory.joint_names:
+				print n
+				name = n.strip('left_')
+				name = name.strip('right_')
+				new_names.append(short_names[name])
+			trajectory.joint_names = new_names
 
-		trajectory = self.enforceMaxTrajectoryVelocity(trajectory)
+			trajectory = self.enforceMaxTrajectoryVelocity(trajectory)
 
-		self.trajectory_queue.append(trajectory)
-		self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
+			self.trajectory_queue.append(trajectory)
+			#self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
 
 	# publish the robot joint states
@@ -375,12 +393,17 @@ class mara_serial():
 		msg.header = Header()
 		msg.header.stamp = rospy.Time.now()
 
-		full_names = {'j1':'joint1', 'j2':'joint2', 'j3':'joint3', 'j4':'joint4', 'j5':'joint5', 'j6':'joint6', 'g':'gripper'}
+		if self.arm_name == "left":
+			full_names = {'j1':'left_joint1', 'j2':'left_joint2', 'j3':'left_joint3', 'j4':'left_joint4', 'j5':'left_joint5', 'j6':'left_joint6', 'g':'left_gripper'}
+		elif self.arm_name == "right":
+			full_names = {'j1':'right_joint1', 'j2':'right_joint2', 'j3':'right_joint3', 'j4':'right_joint4', 'j5':'right_joint5', 'j6':'right_joint6', 'g':'right_gripper'}
+		else:
+			full_names = {'j1':'joint1', 'j2':'joint2', 'j3':'joint3', 'j4':'joint4', 'j5':'joint5', 'j6':'joint6', 'g':'gripper'}
+
 		names = []
 		positions = []
 		for name, theta in angles.iteritems():
 			names.append(full_names[name])
-			#positions.append(0)
 			positions.append((theta - 180.0) * (math.pi/180.0))
 
 		msg.name = names
@@ -413,33 +436,48 @@ class mara_serial():
 				# trajectory is a series of [pos, timestamp] for each joint
 				if len(self.trajectory_queue) > 0:
 
-					print "Executing joint trajectory..."
+					print "Executing joint trajectory...", self.arm_name
 					curr_trajectory = self.trajectory_queue[0]
+
 					t_start = time.time()
 					angles_prev = angles
-
+					waypoint_prev = angles
 
 					positions_err_dict = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
 					velocities_err_dict = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}
 
+
 					# iterate through waypoints in the trajectory
-					for waypoint in curr_trajectory.points:
+					for waypoint, waypoint_num in zip(curr_trajectory.points, range(len(curr_trajectory.points))):
+
+						last_waypoint = False
+						if waypoint_num == len(curr_trajectory.points)-1:
+							last_waypoint = True
+
 						t_subdiv = time.time() 			# subdivision of waypoint period at interval == PWM period
 						t1 = time.time() 				# starting time of PWM period
 						t3 = time.time()
 						t_waypoint = time.time() 		# time waypoint was first seen
 						t_interval = period 			# initial velocity calcualtion based on ideal interval
 						initial_command = True 			# dont the period for initial command
+						error_warning = False			# warns when joints are outside final error
+						final_error_tolerance = 3
 
 						waypoint_angles = angles 		# joint values when waypoint was started
-						print "WAYPOINT-----------------------------------------------------------"
-						print "check interval = ", t_interval
-						print 'check time = ', t_subdiv - t_start
-						print 'current waypoint duration', waypoint.time_from_start.to_sec()
+						#print "WAYPOINT--------", waypoint_num,"of", len(curr_trajectory.points),"---------------------------------------------------"
+						#print "check interval = ", t_interval
+						#print 'check time = ', t_subdiv - t_start
+						#print 'current waypoint duration', waypoint.time_from_start.to_sec()
 
-						# if the waypoint goal time has not elapsed
-						while t_subdiv < t_start + waypoint.time_from_start.to_sec():
-							print "waypoint check...\t \t", (t_start + waypoint.time_from_start.to_sec()) - t_subdiv
+						error_correct_attempts = 0
+						# if the waypoint goal time has not elapsed, or we reached the last waypoint with significant error
+						while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 20):
+
+							# only try to correct fine eend effector errors a few times
+							if (last_waypoint and error_warning):
+								error_correct_attempts += 1
+
+							#print "waypoint check...\t \t", (t_start + waypoint.time_from_start.to_sec()) - t_subdiv
 							measured_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
 							zero_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0} 	# zero velocity commands to joints
 							cmd_vels = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0} 		# high velocity commands to joints
@@ -450,19 +488,23 @@ class mara_serial():
 							for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
 
 								# calculate desired joint velocity accounting for wraparound
-								if (des - waypoint_angles[name]) < -180:
-									goal_vels[name] = (des - waypoint_angles[name] + 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
-								elif (des - waypoint_angles[name]) > 180:
-									goal_vels[name] = (des - waypoint_angles[name] - 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+								if (des - angles[name]) < -180:
+									goal_vels[name] = (des - angles[name] + 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+								elif (des - angles[name]) > 180:
+									goal_vels[name] = (des - angles[name] - 360) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 								else:
-									goal_vels[name] = (des - waypoint_angles[name]) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+									goal_vels[name] = (des - angles[name]) / ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
 								goal_angles[name] = des
 
-							print "Current angles", angles
-							print "Goal angles", goal_angles
-							print "Goal vels", goal_vels
-							print "Starting pos", waypoint_angles
-							print "time", ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+							#print "Last waypoint:", last_waypoint, "Error warn:", error_warning
+							#print "Current angles", angles
+							#print "Previous angles", angles_prev
+							#print "Goal angles", goal_angles
+							#print "Goal vels", goal_vels
+							#print "Starting pos", waypoint_angles
+							#print "time", ((t_start + waypoint.time_from_start.to_sec()) - t_waypoint)
+
+							error_warning = False 			# set true if large joint errors exist
 
 							# for each joint calculate PD velocity commands
 							for joint_name in curr_trajectory.joint_names:
@@ -473,15 +515,33 @@ class mara_serial():
 								window_size = 1
 
 								# calculate velocity accounting for wraparound in the positive and negative direction
-								if angles[joint_name] < 180 and angles_prev[joint_name] > 180 and goal_vels[joint_name] > 0:
+								if angles[joint_name] < 90 and angles_prev[joint_name] > 270:
 									delta_theta = angles[joint_name] - angles_prev[joint_name] + 360
-									err_theta = goal_angles[joint_name] - angles[joint_name] + 360
-								elif angles[joint_name] > 180 and angles_prev[joint_name] < 180 and goal_vels[joint_name] < 0:
+								elif angles[joint_name] > 270 and angles_prev[joint_name] < 90:
 									delta_theta = angles[joint_name] - angles_prev[joint_name] - 360
-									err_theta = goal_angles[joint_name] - angles[joint_name] - 360
 								else:
 									delta_theta = angles[joint_name] - angles_prev[joint_name]
-									err_theta = goal_angles[joint_name] - angles[joint_name]
+
+								if last_waypoint:
+									if goal_angles[joint_name] < 90 and angles[joint_name] > 270:
+										err_theta = goal_angles[joint_name] - angles[joint_name] + 360
+									elif goal_angles[joint_name] > 270 and angles[joint_name] < 90:
+										err_theta = goal_angles[joint_name] - angles[joint_name] - 360
+									else:
+										err_theta = goal_angles[joint_name] - angles[joint_name]
+								
+								else:
+									expected_angle = waypoint_angles[joint_name] + ((t_subdiv - t_waypoint) * goal_vels[joint_name])
+									#print "expected", expected_angle, "current", angles[joint_name]
+									if expected_angle < 90 and angles[joint_name] > 270:
+										err_theta = expected_angle - angles[joint_name] + 360
+									elif expected_angle > 270 and angles[joint_name] < 90:
+										err_theta = expected_angle - angles[joint_name] - 360
+									else:
+										err_theta = expected_angle - angles[joint_name]
+
+								if abs(err_theta) > final_error_tolerance:
+									error_warning = True
 
 								# record the instantaneous velocity ina  sliding window
 								velocity_windows[joint_name].append(delta_theta/t_interval)
@@ -493,15 +553,17 @@ class mara_serial():
 								err_vel = goal_vels[joint_name] - measured_vels[joint_name]
 
 								positions_err_dict[joint_name].append(err_theta)
+								velocities_err_dict[joint_name].append(err_vel)
 								#print joint_name, 'angle', angles[joint_name], 'delta', delta_theta, 'goal', goal_vels[joint_name], 'actual', measured_vels[joint_name]
 
-								kp = 0.2
-								kd = 0.2
+								kp = 0.05
+								kd = 0.1
 								#pid_vel = vel
-								#pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
-								pid_vel = vel + (kd * err_vel)
+								#print min((kp * abs(err_theta)), 1.0)
+								pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
+								#pid_vel = vel + (kd * err_vel) + (kp * err_theta)
 
-								print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
+								#print 'cmd', vel, 'err vel', err_vel, 'err pos', err_theta, 'pid', pid_vel 
 
 								# set duty cycles
 								if abs(pid_vel) <= 10:
@@ -564,27 +626,37 @@ class mara_serial():
 							# END PWM -----------------------------------------------
 
 						t_end_waypoint = time.time()
+						waypoint_prev = waypoint
 
-						# print the errors
-						for name, des in zip(curr_trajectory.joint_names, waypoint.positions):
-							delta = angles[name] - des
-							if delta < -180:
-								delta += 360
-							elif delta > 180:
-								delta -= 360
-							print name, "Waypoint position error", delta
-						
-						for name in curr_trajectory.joint_names:
-							delta = (angles[name] - waypoint_angles[name])
-							if delta < -180:
-								delta += 360
-							elif delta > 180:
-								delta -= 360
-							print "Observed waypoint velocity",  delta / (t_end_waypoint - t_waypoint)
 
 
 					# remove the trajectory from the queue
-					self.trajectory_queue = self.trajectory_queue[1:]
+					if len(self.trajectory_queue) > 1:
+						self.trajectory_queue = self.trajectory_queue.remove(self.trajectory_queue[0])
+					else:
+						self.trajectory_queue = []
+
+
+					avg_pos_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+					avg_vel_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
+					for j in self.orderedJoints:
+						for p_e, v_e in zip(positions_err_dict[j], velocities_err_dict[j]):
+							avg_pos_errors[j] = avg_pos_errors[j] + abs(p_e)
+							avg_vel_errors[j] = avg_vel_errors[j] + abs(v_e)
+						if (len(positions_err_dict[j]) != 0):
+							avg_pos_errors[j] = avg_pos_errors[j] / len(positions_err_dict[j])
+						if (len(velocities_err_dict[j]) != 0):
+							avg_vel_errors[j] = avg_vel_errors[j] / len(velocities_err_dict[j])
+
+					print "POSITION ERROR", avg_pos_errors, sum(avg_pos_errors.values())/len(avg_pos_errors)
+					print "VELOCITIES ERROR", avg_vel_errors, sum(avg_vel_errors.values())/len(avg_vel_errors)
+
+					msg = ExecuteTrajectoryActionResult()
+					print msg
+					msg.header = Header()
+					msg.header.stamp = rospy.Time.now()
+					msg.result.error_code.val = 1
+					self.trajectory_result_pub.publish(msg)
 
 					# plot errors
 					plt.plot(positions_err_dict['j1'], 'b')
@@ -609,15 +681,21 @@ class mara_serial():
 
 
 
+lr = str(sys.argv[1])
+num = int(sys.argv[2])
 
-success = rospy.init_node('joint_trajectory_controller')
-mara_serial = mara_serial()
+print "Starting trajectory server for", lr, 'with device number', num
 
+success = rospy.init_node('joint_trajectory_controller_'+lr)
+mara_serial = mara_serial(device_num=num, left_right=lr)
+
+# initialize the grippers and have user watch to find the device num
 if mara_serial.isInitialized:
 	mara_serial.initializeGripper()
-	mara_serial.startJointTrajectoryControlLoop()
 
-	rospy.spin()
+mara_serial.startJointTrajectoryControlLoop()
+
+rospy.spin()
 
 
 

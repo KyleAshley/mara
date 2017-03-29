@@ -50,7 +50,7 @@
 		<visual>
 			<origin xyz="0 0 0.106" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".03" length=".152"/>
+				<mesh filename="package://mara/models/MARA_wrist.dae" scale="0.001 0.001 0.001"/>
 			</geometry>
 			<material name="White3">
 					<color rgba="1 0.0 0.0 1"/>
@@ -59,9 +59,9 @@
 	</link>
 	<link name="link5" >
 		<visual>
-			<origin xyz="0 0 0.0381" rpy="0 0 0"/>
+			<origin xyz="0 0 0.01425" rpy="0 0 0"/>
 			<geometry>
-				<cylinder radius=".02" length=".0762"/>
+				<cylinder radius=".015" length=".0285"/>
 			</geometry>
 			<material name="Blue1">
 					<color rgba="0.0 0.2 0.9 0"/>
@@ -72,7 +72,7 @@
 		<visual>
 			<origin xyz="0 0 .025" rpy="0 1.57 0"/>
 			<geometry>
-				<cylinder radius=".016" length=".05"/>
+				<mesh filename="package://mara/models/MARA_gripper.dae" scale="0.01 0.01 0.01"/>
 			</geometry>
 			<material name="Blue2">
 					<color rgba="0.0 1 0.9 0"/>
@@ -107,23 +107,23 @@
 	<joint name="joint4" type="continuous">
 		<parent link="link3"/>
 		<child link="link4"/>
-		<origin xyz="-0.23 0 0.152" rpy="0 0 1.57"/>
+		<origin xyz="-0.226 0.0 0.152" rpy="0 0 1.57"/>
                 <axis xyz="0 0 1" />
-		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
+		<limit effort="30" velocity="0.6" lower="-3.14" upper="-0.9" />
 	</joint>
 
-	<joint name="joint5" type="continuous">
+	<joint name="joint5" type="revolute">
 		<parent link="link4"/>
 		<child link="link5"/>
-		<origin xyz="0 0.0 0.152" rpy="-3.14 0 1.57"/>
+		<origin xyz="0 0.0 0.183" rpy="-3.14 0 1.57"/>
                 <axis xyz="0 1 0" />
-        	<limit effort="30" velocity="0.6" lower="0.0" upper="2.6" />
+        	<limit effort="30" velocity="0.6" lower="-3.14" upper="-0.9" />
 	</joint>
 
 	<joint name="joint6" type="continuous">
 		<parent link="link5"/>
 		<child link="link6"/>
-		<origin xyz="0 0.0 0.05" rpy="0 0 3.14"/>
+		<origin xyz="0 0.0 0.005" rpy="0 0 3.14"/>
                 <axis xyz="0 0 1" />
 		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
 	</joint>
