@@ -1,4 +1,28 @@
 #!/usr/bin/env python
+# Copyright (c) 2017, Kyle Ashley
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 import serial
 import cv2
 import sys, time, os
@@ -114,27 +138,31 @@ class mara_serial():
 		joint_angles = {'j1':None, 'j2':None, 'j3':None, 'j4':None, 'j5':None, 'j6':None, 'g':None}
 
 		for i in range(7):
-			val = int(joint_array[i*4:(i*4)+4], 16)
-			# put values between 0-360
-			# joints get +-1800 from 0x0000
-			# gripper: open = 0xbb80, closed = 0x0000
-			if i != 6:
-				encoder_ratio = 0.10
-				key = 'j'+str(i+1)
-				if val > 1800:
-					val = 180 + (180 - ((65535 - val)* float(encoder_ratio)))
-					joint_angles[key] =  val
+
+			try:
+				val = int(joint_array[i*4:(i*4)+4], 16)
+				# put values between 0-360
+				# joints get +-1800 from 0x0000
+				# gripper: open = 0xbb80, closed = 0x0000
+				if i != 6:
+					encoder_ratio = 0.10
+					key = 'j'+str(i+1)
+					if val > 1800:
+						val = 180 + (180 - ((65535 - val)* float(encoder_ratio)))
+						joint_angles[key] =  val
+					else:
+						joint_angles[key] =  val * float(encoder_ratio)
 				else:
-					joint_angles[key] =  val * float(encoder_ratio)
-			else:
-				encoder_ratio = 0.001702
-				key = 'g'
-				if val > 0 and val < 54801:
-					val = val + 7500
-					joint_angles[key] =  val * float(encoder_ratio)
-				else:
-					val = val - 54801
-					joint_angles[key] =  val * float(encoder_ratio)
+					encoder_ratio = 0.001702
+					key = 'g'
+					if val > 0 and val < 54801:
+						val = val + 7500
+						joint_angles[key] =  val * float(encoder_ratio)
+					else:
+						val = val - 54801
+						joint_angles[key] =  val * float(encoder_ratio)
+			except:
+				print "Failed to decode joint values..."
 
 		if verbose:
 			rospy.loginfo("Joint angles received " + str(joint_angles))
@@ -576,9 +604,7 @@ class mara_serial():
 								# set joint commands
 								cmd_vels[joint_name] = pid_vel
 								duty_ratios[joint_name] = min(duty_ratio, 1.0)
-
 								#print "(actual, goal, duty):", joint_name, measured_vels[joint_name], goal_vels[joint_name], duty_ratios[joint_name]
-
 
 							# wait the period out if this is not the first command for a waypoint
 							if not initial_command:

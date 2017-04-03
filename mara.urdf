@@ -11,6 +11,18 @@
 		</visual>	
 	</link>
 
+	<link name="camera_base_link">
+		<visual>
+			<origin xyz="0 -0.2 0.7" rpy="0 0 0"/>
+			<geometry>
+				<box size="0.3 0.6 1.0"/>
+			</geometry>
+			<material name="Cyan2">
+					<color rgba="0 0.2 0.9 1.0"/>
+			</material>
+		</visual>	
+	</link>
+
 	<link name="left_link1" >
 		<visual>
 			<origin xyz="0 0 0.224" rpy="0 0 0"/>
@@ -79,6 +91,7 @@
 			</material>
 		</visual>	
 	</link>
+	
 
 	<joint name="left_joint1" type="continuous">
 		<parent link="base_link"/>
@@ -248,4 +261,18 @@
                 <axis xyz="0 0 1" />
 		<limit effort="30" velocity="0.6" lower="-3.14" upper="3.14" />
 	</joint>
+
+
+	<joint name="camera_joint"  type="fixed">
+	    <origin xyz="0 0 0" rpy="0 0 0" />
+	    	<axis xyz="0 0 0" />
+	    <parent link="base_link"/>
+	    <child link="camera_base_link"/>
+	</joint>
+
+
+
+
 </robot>
+
+
