@@ -128,7 +128,7 @@ SQParameters ObjectPoseEstimator::calculateObjectPose(pcl::PointCloud<pcl::Point
     if (settings.verbose == true) {
         std::cout << ">> Performing object pose estimation using Superquadrics\n";
     }
-    
+
     /*
      * Multi-scale voxelization for pose estimation
      */
@@ -250,11 +250,7 @@ SQParameters ObjectPoseEstimator::run() {
     /*
      * Capture point cloud
      */
-     if (settings.verbose)
-     {
-        std::cout << "Running PointCloudCapture" << std::endl;
-     }
-    cap.run(*cloudPtr, settings);
+    cap.run(*cloudPtr);
      
     /*
      * Generate object models based on extracted clusters
@@ -299,9 +295,6 @@ SQParameters ObjectPoseEstimator::run() {
             results_file << sqParams.px << " " << sqParams.py << " " << sqParams.pz << endl;
             results_file << sqParams.a1 << " " << sqParams.a2 << " " << sqParams.a3 << endl;
             results_file << sqParams.phi << " " << sqParams.theta << " " << sqParams.psi << endl;
-            results_file << sqParams.kx << " " << sqParams.ky << endl;
-            results_file << sqParams.e1 << " " << sqParams.e2 <<  endl;
-            results_file << sqParams.a1 << " " << sqParams.a2 << " " << sqParams.a3 << endl;
         }        
     } else {
         std::cout << ">> NO OBJECTS WERE DETECTED!" << std::endl;

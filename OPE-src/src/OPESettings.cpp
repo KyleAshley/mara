@@ -4,7 +4,7 @@ namespace ope {
 
 OPESettings::OPESettings() : minTgtDepth(0.2f), maxTgtDepth(1.8f), minObjHeight(0.01f), maxObjHeight(0.50f),
                               objVoxelSize(0.003f), maxVoxelSize(0.03f), minVoxelSize(0.003f), 
-                              verbose(true), allowTapering(false), doDebug(false), minIterations(20), fromFile(false), saveData(true) {
+                              verbose(false), allowTapering(false), doDebug(false), minIterations(20) {
 
 }
 
@@ -20,9 +20,6 @@ OPESettings& OPESettings::operator= (const OPESettings& other) {
     this->maxVoxelSize = other.maxVoxelSize;
     this->minIterations = other.minIterations;	
     this->objVoxelSize = other.objVoxelSize;
-    this->fromFile = other.fromFile;
-    this->cloudFile = other.cloudFile;
-    this->saveData = other.saveData;
 
     return *this;
 }

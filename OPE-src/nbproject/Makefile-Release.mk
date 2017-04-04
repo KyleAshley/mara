@@ -21,7 +21,7 @@ FC=gfortran
 AS=as
 
 # Macros
-CND_PLATFORM=GNU-Linux
+CND_PLATFORM=GNU-Linux-x86
 CND_DLIB_EXT=so
 CND_CONF=Release
 CND_DISTDIR=dist
@@ -70,47 +70,47 @@ bin/${CND_CONF}/${CND_PLATFORM}/ope-new: ${OBJECTFILES}
 	${MKDIR} -p bin/${CND_CONF}/${CND_PLATFORM}
 	${LINK.cc} -o bin/${CND_CONF}/${CND_PLATFORM}/ope-new ${OBJECTFILES} ${LDLIBSOPTIONS}
 
-${OBJECTDIR}/src/InertiaCalculations.o: src/InertiaCalculations.cpp
+${OBJECTDIR}/src/InertiaCalculations.o: src/InertiaCalculations.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/InertiaCalculations.o src/InertiaCalculations.cpp
 
-${OBJECTDIR}/src/Minimization.o: src/Minimization.cpp
+${OBJECTDIR}/src/Minimization.o: src/Minimization.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Minimization.o src/Minimization.cpp
 
-${OBJECTDIR}/src/OPEMain.o: src/OPEMain.cpp
+${OBJECTDIR}/src/OPEMain.o: src/OPEMain.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEMain.o src/OPEMain.cpp
 
-${OBJECTDIR}/src/OPESettings.o: src/OPESettings.cpp
+${OBJECTDIR}/src/OPESettings.o: src/OPESettings.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPESettings.o src/OPESettings.cpp
 
-${OBJECTDIR}/src/OPEUtils.o: src/OPEUtils.cpp
+${OBJECTDIR}/src/OPEUtils.o: src/OPEUtils.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEUtils.o src/OPEUtils.cpp
 
-${OBJECTDIR}/src/ObjectPoseEstimator.o: src/ObjectPoseEstimator.cpp
+${OBJECTDIR}/src/ObjectPoseEstimator.o: src/ObjectPoseEstimator.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/ObjectPoseEstimator.o src/ObjectPoseEstimator.cpp
 
-${OBJECTDIR}/src/Plane.o: src/Plane.cpp
+${OBJECTDIR}/src/Plane.o: src/Plane.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Plane.o src/Plane.cpp
 
-${OBJECTDIR}/src/PointCloudCapture.o: src/PointCloudCapture.cpp
+${OBJECTDIR}/src/PointCloudCapture.o: src/PointCloudCapture.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/PointCloudCapture.o src/PointCloudCapture.cpp
 
-${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp
+${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/SQFitting.o src/SQFitting.cpp
@@ -121,6 +121,7 @@ ${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp
 # Clean Targets
 .clean-conf: ${CLEAN_SUBPROJECTS}
 	${RM} -r ${CND_BUILDDIR}/${CND_CONF}
+	${RM} bin/${CND_CONF}/${CND_PLATFORM}/ope-new
 
 # Subprojects
 .clean-subprojects:

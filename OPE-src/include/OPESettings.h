@@ -40,7 +40,6 @@
 
 
 #include "OPECommon.h"
-#include <string>
 
 /** \namespace ope
  *	Namespace where all the Object Pose Estimation functionality resides
@@ -83,15 +82,6 @@ struct OPESettings {
 
 	/// Show a debugging viewer when point cloud is captured
 	bool doDebug;
-
-	/// Determines if point cloud data is received from camera or file
-	bool fromFile;
-
-	/// Path to point cloud file
-	std::string cloudFile;
-
-	/// Determines if point cloud, surface normals, etc. should be saved to a file
-	bool saveData;
 
 	/// Default Constructor
 	OPE_EXPORT OPESettings();

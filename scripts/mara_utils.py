@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os, sys
 
 def inRange(num, lower, upper):
 	return (num >= lower) and (num <= upper)

@@ -6,9 +6,7 @@ joint_names = {
 }
 
 leftWaitingPos = [-0.65, 0.4, 0.8]
-
-
 rightWaitingPos = [0.65, 0.4, 0.8]
 
-rightWaitingRot = [3.785, -0.785, 2.785, 0.7]
-leftWaitingRot = [3.785, -0.785, 2.785, 0.7]
+rightWaitingRot = [0.0, -1.785, 2.785, 0.7]
+leftWaitingRot = [0.0, -1.785, 2.785, 0.7]

@@ -14,19 +14,9 @@
 
 int main (int argc, char *argv[]) {
     ope::OPESettings settings;
-
-    if (argc == 1)
-    {
-    	settings.fromFile = false;
-    	settings.saveData = true;
-   	}
-   	else
-   	{
-   		settings.cloudFile = argv[1];
-		  settings.fromFile = true;
-		  settings.saveData = true;
-
-   	}
+    settings.minTgtDepth = 0.68f;
+    settings.maxTgtDepth = 1.2f;
+    settings.maxObjHeight = 1.0f;
 
     ope::ObjectPoseEstimator estimator(settings);
     ope::SQParameters sqParams = estimator.run();

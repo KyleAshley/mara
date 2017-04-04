@@ -80,7 +80,7 @@ class MaraMoveIt:
         if not len(plan.joint_trajectory.points) > 0:
             return False, plan
 
-    def createPathPlan(self, objpos, arm=0, gripperorientation=[0, 0.74419, 0, 0.6679]):
+    def createPathPlan(self, objpos, arm, gripperorientation):
         pose_target = geometry_msgs.msg.Pose()
         pose_target.orientation.x = gripperorientation[0]
         pose_target.orientation.y = gripperorientation[1]

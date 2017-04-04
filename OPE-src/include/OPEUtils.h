@@ -42,13 +42,8 @@ namespace pcl {
     class PointXYZ;
     class PointXYZRGB;
     class PointXYZRGBA;
-    class RangeImage;
     template<class T> class PointCloud;
 } // pcl
-
-namespace cv {
-    class Mat;
-}
 
 namespace ope {
 
@@ -73,20 +68,12 @@ public:
      * \param <tgt> - output <code>pcl::PointXYZRGB</code> point cloud
      */
     static void convertPointCloud(const pcl::PointCloud<pcl::PointXYZRGBA>& src, pcl::PointCloud<pcl::PointXYZRGB>& tgt); 
-    static void convertPointCloud(const pcl::PointCloud<pcl::PointXYZRGBNormal>& src, pcl::PointCloud<pcl::PointXYZRGB>& tgt);
+
     /**
      * \brief Transform an XYZRGB point cloud from the Kinect optical frame to world coordinate frame
      * \param <cloud> - the cloud to be transformed
      */
     static void transformPointCloud(pcl::PointCloud<pcl::PointXYZRGB>& cloud);
-
-    /**
-    * \create range image and surface normal image from a given point cloud
-    */
-    static cv::Mat createRangeImage(pcl::PointCloud<pcl::PointXYZRGBNormal> cloud);
-    static cv::Mat createSurfaceNormalImage(pcl::PointCloud<pcl::PointXYZRGBNormal> cloud);
-    static cv::Mat createRGBImage(pcl::PointCloud<pcl::PointXYZRGBNormal> cloud);
-    static cv::Mat createPositionImage(pcl::PointCloud<pcl::PointXYZRGBNormal> cloud);
 
     /**
      * \brief Prints the current local time to the output stream

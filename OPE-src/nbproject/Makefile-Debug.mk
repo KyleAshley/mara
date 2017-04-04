@@ -21,7 +21,7 @@ FC=gfortran
 AS=as
 
 # Macros
-CND_PLATFORM=GNU-Linux
+CND_PLATFORM=GNU-Linux-x86
 CND_DLIB_EXT=so
 CND_CONF=Debug
 CND_DISTDIR=dist
@@ -60,64 +60,60 @@ FFLAGS=
 ASFLAGS=
 
 # Link Libraries and Options
-LDLIBSOPTIONS=-lboost_system -lboost_thread -lOpenNI -lpcl_common -lpcl_features -lpcl_filters -lpcl_io -lpcl_search -lpcl_segmentation -lpcl_surface -lpcl_visualization -lvtkCommon -lvtkFiltering -lvtkHybrid -lvtkRendering -lopencv_imgcodecs /usr/local/lib/libopencv_highgui.so /usr/local/lib/libopencv_core.so -lQt5Core -lQt5Gui
+LDLIBSOPTIONS=-lboost_system -lboost_thread -lOpenNI -lpcl_common -lpcl_features -lpcl_filters -lpcl_io -lpcl_search -lpcl_segmentation -lpcl_surface -lpcl_visualization -lvtkCommon -lvtkFiltering -lvtkHybrid -lvtkRendering
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}
 	"${MAKE}"  -f nbproject/Makefile-${CND_CONF}.mk bin/${CND_CONF}/${CND_PLATFORM}/ope-new
 
-bin/${CND_CONF}/${CND_PLATFORM}/ope-new: /usr/local/lib/libopencv_highgui.so
-
-bin/${CND_CONF}/${CND_PLATFORM}/ope-new: /usr/local/lib/libopencv_core.so
-
 bin/${CND_CONF}/${CND_PLATFORM}/ope-new: ${OBJECTFILES}
 	${MKDIR} -p bin/${CND_CONF}/${CND_PLATFORM}
 	${LINK.cc} -o bin/${CND_CONF}/${CND_PLATFORM}/ope-new ${OBJECTFILES} ${LDLIBSOPTIONS}
 
-${OBJECTDIR}/src/InertiaCalculations.o: src/InertiaCalculations.cpp
+${OBJECTDIR}/src/InertiaCalculations.o: src/InertiaCalculations.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/InertiaCalculations.o src/InertiaCalculations.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/InertiaCalculations.o src/InertiaCalculations.cpp
 
-${OBJECTDIR}/src/Minimization.o: src/Minimization.cpp
+${OBJECTDIR}/src/Minimization.o: src/Minimization.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Minimization.o src/Minimization.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Minimization.o src/Minimization.cpp
 
-${OBJECTDIR}/src/OPEMain.o: src/OPEMain.cpp
+${OBJECTDIR}/src/OPEMain.o: src/OPEMain.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEMain.o src/OPEMain.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEMain.o src/OPEMain.cpp
 
-${OBJECTDIR}/src/OPESettings.o: src/OPESettings.cpp
+${OBJECTDIR}/src/OPESettings.o: src/OPESettings.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPESettings.o src/OPESettings.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPESettings.o src/OPESettings.cpp
 
-${OBJECTDIR}/src/OPEUtils.o: src/OPEUtils.cpp
+${OBJECTDIR}/src/OPEUtils.o: src/OPEUtils.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEUtils.o src/OPEUtils.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/OPEUtils.o src/OPEUtils.cpp
 
-${OBJECTDIR}/src/ObjectPoseEstimator.o: src/ObjectPoseEstimator.cpp
+${OBJECTDIR}/src/ObjectPoseEstimator.o: src/ObjectPoseEstimator.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/ObjectPoseEstimator.o src/ObjectPoseEstimator.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/ObjectPoseEstimator.o src/ObjectPoseEstimator.cpp
 
-${OBJECTDIR}/src/Plane.o: src/Plane.cpp
+${OBJECTDIR}/src/Plane.o: src/Plane.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Plane.o src/Plane.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Plane.o src/Plane.cpp
 
-${OBJECTDIR}/src/PointCloudCapture.o: src/PointCloudCapture.cpp
+${OBJECTDIR}/src/PointCloudCapture.o: src/PointCloudCapture.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/PointCloudCapture.o src/PointCloudCapture.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/PointCloudCapture.o src/PointCloudCapture.cpp
 
-${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp
+${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -I/usr/include/opencv -I/usr/include/qt5 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/SQFitting.o src/SQFitting.cpp
+	$(COMPILE.cc) -g -Iinclude -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I/usr/include/vtk-5.8 -I/usr/include/ni -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/SQFitting.o src/SQFitting.cpp
 
 # Subprojects
 .build-subprojects:
@@ -125,7 +121,6 @@ ${OBJECTDIR}/src/SQFitting.o: src/SQFitting.cpp
 # Clean Targets
 .clean-conf: ${CLEAN_SUBPROJECTS}
 	${RM} -r ${CND_BUILDDIR}/${CND_CONF}
-	${RM} -r bin/${CND_CONF}/${CND_PLATFORM}/libopencv_highgui.so bin/${CND_CONF}/${CND_PLATFORM}/libopencv_core.so
 	${RM} bin/${CND_CONF}/${CND_PLATFORM}/ope-new
 
 # Subprojects

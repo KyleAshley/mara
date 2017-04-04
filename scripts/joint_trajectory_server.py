@@ -33,6 +33,8 @@ import datetime
 import math 
 import stat
 
+
+from actionlib_msgs.msg import GoalStatusArray, GoalStatus, GoalID
 import moveit_msgs.msg
 import geometry_msgs.msg
 from trajectory_msgs.msg import JointTrajectory
@@ -112,10 +114,16 @@ class mara_serial():
 		self.trajectory_sub = rospy.Subscriber("/mara/joint_trajectory_controller/trajectory", JointTrajectory, self.updateJointTrajectory)
 		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory, queue_size=4)
 
-		self.joint_state_pub = rospy.Publisher("/mara/joint_positions", JointState, queue_size=2)
+		self.joint_states_prev = {'left_joint1':0.0, 'left_joint2':0.0,'left_joint3':0.0,'left_joint4':0.0,'left_joint5':0.0,'left_joint6':0.0, \
+								  'right_joint1':0.0,'right_joint2':0.0,'right_joint3':0.0,'right_joint4':0.0,'right_joint5':0.0,'right_joint6':0.0}
+		self.joint_state_pub = rospy.Publisher("/joint_states", JointState, queue_size=1)
+		self.joint_state_sub = rospy.Subscriber("/joint_states", JointState, self.updatePrevJointStates)
+		
+
 		self.rviz_joint_state_pub = rospy.Publisher('/move_group/fake_controller_joint_states', JointState, queue_size=1)
 
-		self.trajectory_result_pub = rospy.Publisher('/execute_trajectory/result', ExecuteTrajectoryActionResult, queue_size=1)
+		# TODO: figure out how indicate to the moveit planner/ rviz that we fnished the trajectory (need to know what topic to publish on...)
+		self.trajectory_result_pub = rospy.Publisher('/execute_trajectory/status', GoalStatusArray, queue_size=1)
 
 		
 			
@@ -138,7 +146,6 @@ class mara_serial():
 		joint_angles = {'j1':None, 'j2':None, 'j3':None, 'j4':None, 'j5':None, 'j6':None, 'g':None}
 
 		for i in range(7):
-
 			try:
 				val = int(joint_array[i*4:(i*4)+4], 16)
 				# put values between 0-360
@@ -415,28 +422,42 @@ class mara_serial():
 			#self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
 
+	# updates the broadcasted /joint_states topic with current joint values for the respective arm
+	# preserves the other arm's last known joint positions
+	def updatePrevJointStates(self, msg):
+		i = 0
+		for name in msg.name:
+			self.joint_states_prev[name] = msg.position[i]
+			i+=1
+
+
 	# publish the robot joint states
 	def updateJointPositions(self, angles):
 		msg = JointState()
 		msg.header = Header()
-		msg.header.stamp = rospy.Time.now()
+		msg.header.stamp = rospy.Time.now()	
 
 		if self.arm_name == "left":
-			full_names = {'j1':'left_joint1', 'j2':'left_joint2', 'j3':'left_joint3', 'j4':'left_joint4', 'j5':'left_joint5', 'j6':'left_joint6', 'g':'left_gripper'}
+			full_names = {'j1':'left_joint1', 'j2':'left_joint2', 'j3':'left_joint3', 'j4':'left_joint4', 'j5':'left_joint5', 'j6':'left_joint6'}
 		elif self.arm_name == "right":
-			full_names = {'j1':'right_joint1', 'j2':'right_joint2', 'j3':'right_joint3', 'j4':'right_joint4', 'j5':'right_joint5', 'j6':'right_joint6', 'g':'right_gripper'}
+			full_names = {'j1':'right_joint1', 'j2':'right_joint2', 'j3':'right_joint3', 'j4':'right_joint4', 'j5':'right_joint5', 'j6':'right_joint6'}
 		else:
-			full_names = {'j1':'joint1', 'j2':'joint2', 'j3':'joint3', 'j4':'joint4', 'j5':'joint5', 'j6':'joint6', 'g':'gripper'}
+			full_names = {'j1':'joint1', 'j2':'joint2', 'j3':'joint3', 'j4':'joint4', 'j5':'joint5', 'j6':'joint6'}
 
 		names = []
 		positions = []
 		for name, theta in angles.iteritems():
-			names.append(full_names[name])
-			positions.append((theta - 180.0) * (math.pi/180.0))
+			if name == 'g':
+				pass
+			else:
+				self.joint_states_prev[full_names[name]] = (theta - 180.0) * (math.pi/180.0)
+
+		for name, theta in self.joint_states_prev.iteritems():
+			names.append(name)
+			positions.append(theta)
 
 		msg.name = names
 		msg.position = positions
-
 		self.joint_state_pub.publish(msg)
 
 
@@ -610,7 +631,7 @@ class mara_serial():
 							if not initial_command:
 								t6 = time.time()
 								t_wait = period - (t6 - t1)
-								time.sleep(max(t_wait, 0.0))
+								rospy.sleep(max(t_wait, 0.0))
 								t7 = time.time()
 							else:
 								initial_command = False
@@ -677,21 +698,24 @@ class mara_serial():
 					print "POSITION ERROR", avg_pos_errors, sum(avg_pos_errors.values())/len(avg_pos_errors)
 					print "VELOCITIES ERROR", avg_vel_errors, sum(avg_vel_errors.values())/len(avg_vel_errors)
 
-					msg = ExecuteTrajectoryActionResult()
+					msg = GoalStatusArray()
 					print msg
 					msg.header = Header()
 					msg.header.stamp = rospy.Time.now()
-					msg.result.error_code.val = 1
+					msg.status_list = [GoalStatus()]
+					msg.status_list[0].goal_id = GoalID()
+					msg.status_list[0].goal_id.id = "SUCCEEDED"
+					msg.status_list[0].status = 3
 					self.trajectory_result_pub.publish(msg)
 
 					# plot errors
-					plt.plot(positions_err_dict['j1'], 'b')
-					plt.plot(positions_err_dict['j2'], 'r')
-					plt.plot(positions_err_dict['j3'], 'm')
-					plt.plot(positions_err_dict['j4'], 'g')
-					plt.plot(positions_err_dict['j5'], 'k')
-					plt.plot(positions_err_dict['j6'], 'y')
-					plt.show()
+					#plt.plot(positions_err_dict['j1'], 'b')
+					#plt.plot(positions_err_dict['j2'], 'r')
+					#plt.plot(positions_err_dict['j3'], 'm')
+					#plt.plot(positions_err_dict['j4'], 'g')
+					#plt.plot(positions_err_dict['j5'], 'k')
+					#plt.plot(positions_err_dict['j6'], 'y')
+					#plt.show()
 
 				# no trajectory in queue
 				else:

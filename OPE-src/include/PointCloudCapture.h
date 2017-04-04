@@ -74,6 +74,7 @@ public:
 	 */
 	void run(pcl::PointCloud<pcl::PointXYZRGB>& ptCloud, const OPESettings& settings = OPESettings());
 
+
 	/// \brief Callback function that is used to read XYZRGB point clouds from the Kinect
 	void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud);
 };
