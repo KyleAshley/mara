@@ -30,6 +30,8 @@ import geometry_msgs.msg
 # MoveIt
 import moveit_commander
 import moveit_msgs.msg
+import numpy as np
+from sklearn import preprocessing
 
 import sys
 
@@ -43,7 +45,7 @@ class MaraMoveIt:
         self.leftGroup = moveit_commander.MoveGroupCommander("left_arm")
         self.rightGroup = moveit_commander.MoveGroupCommander("right_arm")
         self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',
-                                                            moveit_msgs.msg.DisplayTrajectory)
+                                                            moveit_msgs.msg.DisplayTrajectory, queue_size=1)
 
     def __del__(self):
         moveit_commander.roscpp_shutdown()
@@ -82,6 +84,10 @@ class MaraMoveIt:
 
     def createPathPlan(self, objpos, arm, gripperorientation):
         pose_target = geometry_msgs.msg.Pose()
+
+        gripperorientation = preprocessing.normalize(gripperorientation, norm='l2')
+        gripperorientation = gripperorientation[0]
+
         pose_target.orientation.x = gripperorientation[0]
         pose_target.orientation.y = gripperorientation[1]
         pose_target.orientation.z = gripperorientation[2]
@@ -120,7 +126,6 @@ class MaraMoveIt:
             return False
 
     def executePlan(self, arm, plan):
-        
         shutoff = queryShutoff()
 
         if shutoff:

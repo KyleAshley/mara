@@ -5,11 +5,12 @@ from camera_publisher import camera_publisher
 import mara_moveit
 import threading
 
-import os, sys
+import os, sys, time
 
 import mara_positions
 from mara_utils import *
 import OPEAssist
+from std_msgs.msg import Int32, Header
 
 # Steps to launch:
 #
@@ -25,6 +26,7 @@ import OPEAssist
 
 
 
+
 OPENNI_CMD = "roslaunch openni_launch openni.launch"
 OPE_DIR = "/home/carrt/Dropbox/catkin_ws/src/mara/OPE-MARA"
 KILL_XNSENSOR_CMD = "killall killXnSensorServer"
@@ -32,6 +34,15 @@ KILL_XNSENSOR_CMD = "killall killXnSensorServer"
 class mara_controller():
 	def __init__(self):
 		self.moveit = mara_moveit.MaraMoveIt()
+		self.rightGripperAction_pub = rospy.Publisher("/mara/limb/right/gripper_action", Int32, queue_size=1)
+		self.leftGripperAction_pub = rospy.Publisher("/mara/limb/left/gripper_action", Int32, queue_size=1)
+
+	def commandGripperPosition(self, lr, val):
+		if lr == 'left':
+			self.rightGripperAction_pub.publish(int(val))
+		elif lr == 'right':
+			self.rightGripperAction_pub.publish(int(val))
+
 
 
 	def goToWaiting(self, arm):
@@ -55,6 +66,9 @@ class mara_controller():
 				print "Could not move to waiting position!"
 				return False
 
+
+
+
 	# Object Grasping
 	# - Assume objects are in view of robot on a table
 	# - Runs OPE and grasps  object with color of parameter 'color'
@@ -67,11 +81,16 @@ class mara_controller():
 		self.moveit.scene.remove_world_object("TABLE")
 
 		# reset arms
-		self.goToWaiting(0)
-		#rospy.sleep(1)
+		#self.goToWaiting(0)
+		#time.sleep(1.0)
 
-		#self.goToWaiting(1)
-		#rospy.sleep(1)
+		self.goToWaiting(1)
+		time.sleep(1.0)
+
+		self.commandGripperPosition(lr='left', val=60)
+		time.sleep(3.0)
+		self.commandGripperPosition(lr='right', val=60)
+		time.sleep(3.0)
 
 		#Remove Old PCDs
 		#removePCDs(OPE_DIR)
