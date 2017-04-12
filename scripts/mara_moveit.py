@@ -145,9 +145,3 @@ class MaraMoveIt:
                 return 0
             else:
                 return 1
-
-    def pick(self, arm, object_id=None):
-        if arm == 0:
-            self.leftGroup.pick(object_id)
-        else:
-            self.rightGroup.pick(object_id)

@@ -38,7 +38,9 @@ from actionlib_msgs.msg import GoalStatusArray, GoalStatus, GoalID
 from control_msgs.msg import (
     FollowJointTrajectoryAction,
     FollowJointTrajectoryFeedback,
+    FollowJointTrajectoryActionFeedback,
     FollowJointTrajectoryResult,
+    FollowJointTrajectoryActionResult
 )
 import moveit_msgs.msg
 import geometry_msgs.msg
@@ -127,21 +129,22 @@ class JointTrajectoryServer():
 
 		# ros subs and pubs
 		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory, queue_size=4)
-		self.gripper_sub = rospy.Subscriber('/mara/limb/' + self.arm_name +'/gripper_action', Int32, self.updateGripperPosition, queue_size=1)
+		self.gripper_sub = rospy.Subscriber('/mara/limb/' + self.arm_name +'/gripper_action/position', Int32, self.updateGripperPosition, queue_size=1)
 
 		self.joint_state_pub = rospy.Publisher("/mara/limb/" +self.arm_name +"/joint_states", JointState, queue_size=1)
+		self.gripper_result_pub = rospy.Publisher("/mara/limb/" +self.arm_name +"/gripper_action/result", GoalStatus, queue_size=1)
+		self.arm_result_pub = rospy.Publisher("/mara/limb/" +self.arm_name +"/follow_joint_trajectory/result", FollowJointTrajectoryActionResult, queue_size=1)
 		
 		self.server = actionlib.SimpleActionServer(
             '/mara/limb/' + self.arm_name + '/follow_joint_trajectory',
             FollowJointTrajectoryAction,
             execute_cb=self.updateMoveitTrajectory,
 			auto_start=False)
+		self.trajectory_status = -1
 		self.server.start()
-		self.fdbk = FollowJointTrajectoryFeedback() 	# feedback msg
-		self.result = FollowJointTrajectoryResult()		# result message
+		self.fdbk = FollowJointTrajectoryActionFeedback() 		# feedback msg
+		self.result = FollowJointTrajectoryActionResult()		# result message
 		
-
-
 
 	#--------------------------------------------------------------------------------------------------------------------------------------------------#
 	# Callbacks
@@ -157,10 +160,21 @@ class JointTrajectoryServer():
 		angles[self.arm_name+"_gripper"] = int(msg.data)
 		vels[self.arm_name+"_gripper"] = 20.0
 
+		msg = GoalStatus()
+		msg.status = msg.ACTIVE
+		self.gripper_result_pub.publish(msg)
 		self.commandAllJointAngles(angles, vels)
+
+		msg.status = msg.SUCCEEDED
+		self.gripper_result_pub.publish(msg)
+
+		rospy.sleep(0.1)
+		msg.status = msg.PENDING
+		self.gripper_result_pub.publish(msg)
 
 
 	def updateFeedback(self, desired_point, angles, error_dict, curr_time):
+		print self.fdbk
 		self.fdbk.header.stamp = rospy.Duration.from_sec(rospy.get_time())
 		self.fdbk.joint_names = self.full_joint_names
 		self.fdbk.desired = desired_point
@@ -171,30 +185,54 @@ class JointTrajectoryServer():
 		self.fdbk.error.time_from_start = rospy.Duration.from_sec(curr_time)
 		self.server.publish_feedback(self.fdbk)
 
+
 	# receives trajectories from the moveit topic and adds them to the execution queue
 	def updateMoveitTrajectory(self, msg):
+		self.pauseControlLoop = True 	# pause the control loop to free the serial bus
+		rospy.sleep(0.1)
 
+		# first get the most recent joint states
+		angles = self.getJointAngles() 
+		self.updateJointPositions(angles)
+
+		self.pauseControlLoop = False
+		rospy.sleep(0.1)
+
+		# determine what kind of message we received
+		self.trajectory_status = -1
 		traj = None
 		if type(msg) is MoveGroupActionResult:
 			traj = msg.result.planned_trajectory.joint_trajectory
 		else:
 			traj = msg.trajectory
 
+		# execute trajectory if its for the correct arm
 		if self.arm_name in traj.joint_names[0]:
 			print 'Received new RVIZ joint trajectory for', self.arm_name 
 			trajectory = traj
 			short_names = {'joint1':'j1', 'joint2':'j2', 'joint3':'j3', 'joint4':'j4', 'joint5':'j5', 'joint6':'j6', 'gripper':'g'}
 			new_names = []
 			for n in trajectory.joint_names:
-				print n
 				name = n.strip('left_')
 				name = name.strip('right_')
 				new_names.append(short_names[name])
 			trajectory.joint_names = new_names
 
+			# slow down the trajectory and add it to the queue
 			trajectory = self.enforceMaxTrajectoryVelocity(trajectory)
-
 			self.trajectory_queue.append(trajectory)
+
+			# wait for execution to complete
+			while self.trajectory_status != self.result.result.SUCCESSFUL:
+				rospy.sleep(0.05)
+
+			print "SUCCESS, alerting the moveit client"
+			# publish the result
+			self.result.header = Header()
+			self.result.header.stamp = rospy.Time.now()
+			self.result.result.error_code = self.result.result.SUCCESSFUL
+			self.arm_result_pub.publish(self.result)
+		
 			#self.trajectory_queue = self.trajectory_queue[-self.trajectory_queue_len:]
 
 
@@ -252,6 +290,7 @@ class JointTrajectoryServer():
 
 		for i in range(7):
 			try:
+				print joint_array
 				val = int(joint_array[i*4:(i*4)+4], 16)
 				# put values between 0-360
 				# joints get +-1800 from 0x0000
@@ -536,7 +575,6 @@ class JointTrajectoryServer():
 	# scale velocity down to < 30 deg/s
 	def enforceMaxTrajectoryVelocity(self, trajectory):
 		
-		print trajectory.points
 		limitExceeded = True
 
 		while(limitExceeded):
@@ -570,7 +608,6 @@ class JointTrajectoryServer():
 					angle = angle % 360
 				new_positions.append(angle)
 			p1.positions = new_positions
-			print p1.positions
 
 		new_trajectory = trajectory
 		return new_trajectory
@@ -600,6 +637,9 @@ class JointTrajectoryServer():
 
 					# while no trajectories are being executed, simply update the joint state
 					angles = self.getJointAngles() 
+					if not angles:
+						print "Exiting control loop"
+						break
 					self.updateJointPositions(angles)
 
 					# when there is a new trajectory, execute it
@@ -793,13 +833,8 @@ class JointTrajectoryServer():
 							t_end_waypoint = time.time()
 							waypoint_prev = waypoint
 
-
-						# remove the trajectory from the queue
-						if len(self.trajectory_queue) > 1:
-							self.trajectory_queue = self.trajectory_queue.remove(self.trajectory_queue[0])
-						else:
-							self.trajectory_queue = []
-
+						# TODO make this an actual queue (problems encountered due to multiple trajectories being received for a single plan)
+						self.trajectory_queue = []
 
 						avg_pos_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
 						avg_vel_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
@@ -812,11 +847,10 @@ class JointTrajectoryServer():
 							if (len(velocities_err_dict[j]) != 0):
 								avg_vel_errors[j] = avg_vel_errors[j] / len(velocities_err_dict[j])
 
-						print "POSITION ERROR", avg_pos_errors, sum(avg_pos_errors.values())/len(avg_pos_errors)
-						print "VELOCITIES ERROR", avg_vel_errors, sum(avg_vel_errors.values())/len(avg_vel_errors)
+						#print "POSITION ERROR", avg_pos_errors, sum(avg_pos_errors.values())/len(avg_pos_errors)
+						#print "VELOCITIES ERROR", avg_vel_errors, sum(avg_vel_errors.values())/len(avg_vel_errors)
 
-						self.result.error_code = self.result.SUCCESSFUL
-						self.server.set_succeeded(self.result)
+						self.trajectory_status = self.result.result.SUCCESSFUL
 						# plot errors
 						#plt.plot(positions_err_dict['j1'], 'b')
 						#plt.plot(positions_err_dict['j2'], 'r')

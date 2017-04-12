@@ -12,3 +12,7 @@ rightWaitingPos = [0.65, 0.4, 0.8]
 rightWaitingRot = [0.0, 0.7, 0.7, 0.0]
 leftWaitingRot = [-0.7, 0.0, 0.0, 0.7]
 
+right_preObjectPose = [0.12, 0.7, 0.7]
+right_objectPose = [0.12, 0.8, 0.7]
+
+
