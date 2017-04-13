@@ -61,6 +61,9 @@ import threading
 # (Done automatically now):
 # - $ sudo chmod +777 /dev/ttyUSB0
 # - $ sudo modprobe usbserial vendor=0x067b product=0x2303 
+#
+# To kill all mara processes:
+# 	$ sudo kill -9 `ps -ef | grep mara | awk '{ print $2 }'`
 
 
 # USAGE:
@@ -70,7 +73,7 @@ class JointTrajectoryServer():
 	def __init__(self, device_num=None, left_right='l'):
 
 		self.isInitialized = False
-		self.usb_error = False
+		self.encoder_decode_error = False
 		self.interface = None 			# python serial interface
 
 		device_list = self.getUSBDeviceNames()
@@ -80,25 +83,8 @@ class JointTrajectoryServer():
 			self.device_name = device_list[device_num] 					# linux device name for serial interface
 
 		call(["sudo", "chmod", "+777", self.device_name]) 	# give permissions to access device file
-
-		# open the serial interface to the arm
-		try:
-			self.interface = serial.Serial(self.device_name, 9600, timeout=0.1)
-			print self.interface.name
-			self.isInitialized = True
-		except:
-			print("Could not open usb interface for left arm on: \t ---> \t" + str(self.device_name))
-			print "Attempting to load the kernel module..."
-			os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
-
-			try:
-				print ("Opening mara control on: \t \t ---> \t" + str(self.interface.name))
-				self.interface = serial.Serial(self.device, 9600, timeout=0.1)
-				self.isInitialized = True
-
-			except Exception, e:
-				print "Failed...exiting"
-				self.isInitialized = False
+		self.initializeSerialInterface(self.device_name)
+		self.resetSerialInterface()
 
 		# need a better method here
 		if 'r' in left_right:
@@ -108,8 +94,9 @@ class JointTrajectoryServer():
 
 		print "Initializing", self.arm_name, "arm..."
 
-		self.rate = 0.2 				# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
-		self.pauseControlLoop = False	# flag to set when you want to use serial commands outside of the control loop
+		self.rate = 0.2 					# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
+		self.max_trajectory_velocity = 0.25 # maximum allowed joint velocity (rad/sec)
+		self.pauseControlLoop = False		# flag to set when you want to use serial commands outside of the control loop
 
 		# serial communication results
 		self.joint_array = None 	# most recent hex array from encoders
@@ -122,7 +109,8 @@ class JointTrajectoryServer():
 		self.full_joint_names = [self.arm_name +'_joint1', self.arm_name +'_joint2', self.arm_name +'_joint3', \
 								 self.arm_name +'_joint4', self.arm_name +'_joint5', self.arm_name +'_joint6']
 
-		self.joint_states_curr = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0,self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0}
+		self.joint_states_curr = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0, \
+								  self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0}
 
 		# project directory
 		self.project_path = "/home/carrt/Dropbox/catkin_ws/src/mara/"
@@ -154,8 +142,10 @@ class JointTrajectoryServer():
 		self.pauseControlLoop = True 	# pause the control loop to free the serial bus
 		rospy.sleep(1.0)
 
-		angles = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0,self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0,self.arm_name+'_gripper':0.0}
-		vels = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0,self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0,self.arm_name+'_gripper':0.0}
+		angles = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0, \
+				  self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0,self.arm_name+'_gripper':0.0}
+		vels = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0, \
+				self.arm_name+'_joint4':0.0,self.arm_name+'_joint5':0.0,self.arm_name+'_joint6':0.0,self.arm_name+'_gripper':0.0}
 
 		angles[self.arm_name+"_gripper"] = int(msg.data)
 		vels[self.arm_name+"_gripper"] = 20.0
@@ -269,6 +259,35 @@ class JointTrajectoryServer():
 	#--------------------------------------------------------------------------------------------------------------------------------------------------#
 	# Utilities
 	#--------------------------------------------------------------------------------------------------------------------------------------------------#
+	def initializeSerialInterface(self, device_name):
+		# open the serial interface to the arm
+		try:
+			self.interface = serial.Serial(device_name, 9600,xonxoff=True, timeout=0.1)
+			print self.interface.name
+			self.isInitialized = True
+		except:
+			print("Could not open usb interface for left arm on: \t ---> \t" + str(device_name))
+			print "Attempting to load the kernel module..."
+			os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
+
+			try:
+				print ("Opening mara control on: \t \t ---> \t" + str(self.interface.name))
+				self.interface = serial.Serial(self.device, 9600, xonxoff=True, timeout=0.1)
+				self.isInitialized = True
+
+			except Exception, e:
+				print "Failed...exiting"
+				self.isInitialized = False
+
+	def resetSerialInterface(self):
+		os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
+		self.interface = serial.Serial(self.device_name, 9600,xonxoff=True, timeout=0.1)
+		self.interface.write('\r')
+		val = self.interface.read(1)
+		while val:
+			val = self.interface.read(1)
+		self.isInitialized = True
+
 
 	# looks for USB devices on /dev, returns a list of stings containing the device names
 	def getUSBDeviceNames(self):
@@ -288,9 +307,8 @@ class JointTrajectoryServer():
 		# degrees per encoder step
 		joint_angles = {'j1':None, 'j2':None, 'j3':None, 'j4':None, 'j5':None, 'j6':None, 'g':None}
 
-		for i in range(7):
-			try:
-				print joint_array
+		try:
+			for i in range(7):
 				val = int(joint_array[i*4:(i*4)+4], 16)
 				# put values between 0-360
 				# joints get +-1800 from 0x0000
@@ -312,10 +330,11 @@ class JointTrajectoryServer():
 					else:
 						val = val - 54801
 						joint_angles[key] =  val * float(encoder_ratio)
-					self.usb_error = False
-			except:
-				print "Failed to decode joint values..."
-				self.usb_error = True
+			self.encoder_decode_error = False
+
+		except:
+			print "Failed to decode joint values..."
+			self.encoder_decode_error = True
 
 		if verbose:
 			rospy.loginfo("Joint angles received " + str(joint_angles))
@@ -330,25 +349,27 @@ class JointTrajectoryServer():
 			self.joint_array = self.interface.read(29)
 
 			if len(self.joint_array) != 0 and ">Stop" not in str(self.joint_array):
-				try:
-					# convert hex response to joint angles
-					self.joint_angles = self.decodeJointValues(self.joint_array)
+	
+				# convert hex response to joint angles
+				self.joint_angles = self.decodeJointValues(self.joint_array)
 
-					if not self.usb_error:
-						self.joint_angles['j3'] = self.joint_angles['j3'] - self.joint_angles['j2'] 		# offset linked encoders
-						if self.joint_angles['j3'] < 0:
-							self.joint_angles['j3'] += 360
-					else:
-						self.interface.flush()
-
-				except:
-					self.interface.flush()
-
+				if not self.encoder_decode_error:
+					self.joint_angles['j3'] = self.joint_angles['j3'] - self.joint_angles['j2'] 		# offset linked encoders
+					if self.joint_angles['j3'] < 0:
+						self.joint_angles['j3'] += 360
+				else:
+					print "Error: Bad joint values. Re-initializing serial interface"
+					self.resetSerialInterface()
 			else:
 				if ">Stop" in str(self.joint_array):
 					print "Warning: joints near singularity..."
 				else:
-					print "Warning: failed to receive joint state from left arm"
+					print "Error: failed to receive joint state from left arm. Re-initializing serial interface"
+					self.resetSerialInterface()
+
+		else:
+			print "Serial interface is not working...re-initializing"
+			self.resetSerialInterface()
 
 		return self.joint_angles
 
@@ -425,7 +446,6 @@ class JointTrajectoryServer():
 	# shortest movement
 	def signVelocity(self, current_angle, desired_angle, vel, isGripper=False):
 		# check which direction we should rotate the joint
-
 		# set the sign
 		if not isGripper:
 			# shift current angle to zero and desired angle relative to current angle
@@ -447,7 +467,7 @@ class JointTrajectoryServer():
 
 		return new_vel
 
-
+	# OLD (Dont use)
 	# static velocity control (only using 10, 20, or 30 deg per sec builtin commands)
 	def commandJointAngle_STATIC(self, joint_name, angle, vel, variable_velocity=False):
 
@@ -499,6 +519,7 @@ class JointTrajectoryServer():
 	def commandAllJointAngles(self, des_angles, vels):
 
 		curr_angles = self.getJointAngles()
+		self.updateJointPositions(curr_angles)
 		rate = 0.05
 		
 		full_names = {'j1':self.arm_name+'_joint1', 'j2':self.arm_name+'_joint2', 'j3':self.arm_name+'_joint3', \
@@ -519,7 +540,7 @@ class JointTrajectoryServer():
 			stop_conditions[condi] = False
 
 		for joint_name in curr_angles.keys():
-			tolerance = 3.0
+			tolerance = 1.0
 			lower = des_angles[full_names[joint_name]] - tolerance
 			upper = des_angles[full_names[joint_name]] + tolerance
 			# set stop condition for joint movement with wrap-around at 360 degrees
@@ -532,11 +553,12 @@ class JointTrajectoryServer():
 		print all(value == 0 for value in vels.values())
 		while not all(value == 0 for value in vels.values()):
 			curr_angles = self.getJointAngles()
+			self.updateJointPositions(curr_angles)
 			self.commandAllJointVelocities(vels)
 
 			print curr_angles
 			for joint_name in curr_angles.keys():
-				tolerance = 3.0
+				tolerance = 1.0
 				lower = des_angles[full_names[joint_name]] - tolerance
 				upper = des_angles[full_names[joint_name]] + tolerance
 				# set stop condition for joint movement with wrap-around at 360 degrees
@@ -583,7 +605,7 @@ class JointTrajectoryServer():
 			for p1 in trajectory.points:
 				for n in range(len(trajectory.joint_names)):
 					# if the velocity threshold is exceeded, double the timestamps
-					if p1.velocities[n] > 0.3 or p1.velocities[n] < -0.3:
+					if p1.velocities[n] > self.max_trajectory_velocity or p1.velocities[n] < -self.max_trajectory_velocity:
 						for p2 in trajectory.points:
 							p2.time_from_start *= 2
 							new_vels = []
@@ -684,6 +706,12 @@ class JointTrajectoryServer():
 							# if the waypoint goal time has not elapsed, or we reached the last waypoint with significant error
 							while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 20):
 
+
+								while None in angles.viewvalues():
+									print "Retrying to query joint states..."
+									angles = self.getJointAngles() # get new joint values
+									rospy.sleep(self.rate)
+
 								# only try to correct fine eend effector errors a few times
 								if (last_waypoint and error_warning):
 									error_correct_attempts += 1
@@ -769,7 +797,7 @@ class JointTrajectoryServer():
 
 									# PD calculation
 									kp = 0.05
-									kd = 0.1
+									kd = 0.2
 									pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
 
 									# set duty cycles
@@ -804,6 +832,7 @@ class JointTrajectoryServer():
 								# place the sensor polling in duty pulse
 								angles_prev = angles 			# save old joint values
 								angles =  self.getJointAngles() # get new joint values
+								self.updateJointPositions(angles)
 
 								t3_prev = t3
 								t3 = time.time()
