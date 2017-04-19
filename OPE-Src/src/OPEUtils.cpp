@@ -120,17 +120,14 @@ size_t Utils::getDesiredObject(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr ptClo
     viewer->setCameraFieldOfView(0.8575);
     viewer->setCameraClipDistances(0.520973,3.14056);
 
-    boost::this_thread::sleep(boost::posix_time::microseconds(300));
+    boost::this_thread::sleep(boost::posix_time::microseconds(150));
     
     viewer->saveScreenshot("output.png");
-    viewer->spinOnce(10);
-    boost::this_thread::sleep(boost::posix_time::microseconds(300));
-    /*
+    
     while (!viewer->wasStopped()) {
         viewer->spinOnce(100);
         boost::this_thread::sleep(boost::posix_time::microseconds(10));
     }
-    */
 
     viewer->close();
     boost::this_thread::sleep(boost::posix_time::microseconds(10));

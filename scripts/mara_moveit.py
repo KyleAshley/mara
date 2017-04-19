@@ -50,7 +50,7 @@ class MaraMoveIt:
     def __del__(self):
         moveit_commander.roscpp_shutdown()
 
-    def addObject(self, objName, objPos, objSize, objRot = [0, 0, 0, 1]):
+    def addObject(self, objName, objPos, objSize, objRot = [0, 0, 0.58, 1]):
         """Adds collision object to the environment
            objName, objPos, objSize, objRot
         """

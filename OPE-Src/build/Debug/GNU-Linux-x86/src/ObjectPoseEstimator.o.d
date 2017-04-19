@@ -53,11 +53,7 @@ build/Debug/GNU-Linux-x86/src/ObjectPoseEstimator.o: \
  include/TableObjectModeler.h \
  /usr/include/pcl-1.7/pcl/filters/statistical_outlier_removal.h \
  /usr/include/pcl-1.7/pcl/filters/filter_indices.h \
- /usr/include/pcl-1.7/pcl/io/pcd_io.h \
- /usr/include/pcl-1.7/pcl/io/file_io.h \
- /usr/include/pcl-1.7/pcl/io/boost.h \
- /usr/include/pcl-1.7/pcl/io/impl/pcd_io.hpp \
- /usr/include/pcl-1.7/pcl/io/lzf.h include/TableObjectDetector.h \
+ include/TableObjectDetector.h \
  /usr/include/pcl-1.7/pcl/filters/passthrough.h \
  /usr/include/pcl-1.7/pcl/filters/extract_indices.h \
  /usr/include/pcl-1.7/pcl/features/normal_3d.h \
@@ -207,16 +203,6 @@ include/TableObjectModeler.h:
 /usr/include/pcl-1.7/pcl/filters/statistical_outlier_removal.h:
 
 /usr/include/pcl-1.7/pcl/filters/filter_indices.h:
-
-/usr/include/pcl-1.7/pcl/io/pcd_io.h:
-
-/usr/include/pcl-1.7/pcl/io/file_io.h:
-
-/usr/include/pcl-1.7/pcl/io/boost.h:
-
-/usr/include/pcl-1.7/pcl/io/impl/pcd_io.hpp:
-
-/usr/include/pcl-1.7/pcl/io/lzf.h:
 
 include/TableObjectDetector.h:
 

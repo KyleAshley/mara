@@ -42,8 +42,6 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/filters/statistical_outlier_removal.h>
- #include <pcl/io/pcd_io.h>
-
 #include "TableObjectDetector.h"
 #include "OPEUtils.h"
 
@@ -284,8 +282,6 @@ public:
                 TableObjectModel< PointType > objectModel;
                 objectModel.create(detector, i);
                 objects.push_back(objectModel);
-                std::string filename = "object_" + boost::lexical_cast<std::string>(i) + ".pcd";
-                pcl::io::savePCDFileASCII (filename, objectModel.objectCloud);
             }
         } else {
             std::cout << ">>\t " << "No objects were detected" << std::endl;

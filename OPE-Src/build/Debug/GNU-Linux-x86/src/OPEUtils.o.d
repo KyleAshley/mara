@@ -75,11 +75,7 @@ build/Debug/GNU-Linux-x86/src/OPEUtils.o: src/OPEUtils.cpp \
  /usr/include/pcl-1.7/pcl/common/impl/projection_matrix.hpp \
  /usr/include/pcl-1.7/pcl/cloud_iterator.h \
  /usr/include/pcl-1.7/pcl/impl/cloud_iterator.hpp \
- /usr/include/pcl-1.7/pcl/io/pcd_io.h \
- /usr/include/pcl-1.7/pcl/io/file_io.h \
- /usr/include/pcl-1.7/pcl/io/boost.h \
- /usr/include/pcl-1.7/pcl/io/impl/pcd_io.hpp \
- /usr/include/pcl-1.7/pcl/io/lzf.h include/TableObjectDetector.h \
+ include/TableObjectDetector.h \
  /usr/include/pcl-1.7/pcl/filters/voxel_grid.h \
  /usr/include/pcl-1.7/pcl/filters/passthrough.h \
  /usr/include/pcl-1.7/pcl/filters/extract_indices.h \
@@ -273,16 +269,6 @@ include/TableObjectModeler.h:
 /usr/include/pcl-1.7/pcl/cloud_iterator.h:
 
 /usr/include/pcl-1.7/pcl/impl/cloud_iterator.hpp:
-
-/usr/include/pcl-1.7/pcl/io/pcd_io.h:
-
-/usr/include/pcl-1.7/pcl/io/file_io.h:
-
-/usr/include/pcl-1.7/pcl/io/boost.h:
-
-/usr/include/pcl-1.7/pcl/io/impl/pcd_io.hpp:
-
-/usr/include/pcl-1.7/pcl/io/lzf.h:
 
 include/TableObjectDetector.h:
 

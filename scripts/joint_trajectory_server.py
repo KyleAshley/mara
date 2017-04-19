@@ -94,7 +94,7 @@ class JointTrajectoryServer():
 
 		print "Initializing", self.arm_name, "arm..."
 
-		self.rate = 0.2 					# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
+		self.rate = 0.22 					# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
 		self.max_trajectory_velocity = 0.25 # maximum allowed joint velocity (rad/sec)
 		self.pauseControlLoop = False		# flag to set when you want to use serial commands outside of the control loop
 
@@ -353,6 +353,7 @@ class JointTrajectoryServer():
 				# convert hex response to joint angles
 				self.joint_angles = self.decodeJointValues(self.joint_array)
 
+				# this modification to decoded values is neccesary for some reason
 				if not self.encoder_decode_error:
 					self.joint_angles['j3'] = self.joint_angles['j3'] - self.joint_angles['j2'] 		# offset linked encoders
 					if self.joint_angles['j3'] < 0:
@@ -386,7 +387,7 @@ class JointTrajectoryServer():
 			self.interface.write('jv ' + str(joint) + sign + str(vel) + '\r')
 
 
-	# command a single joint at 'vel' degrees per sec using the 'm' command
+	# command a multplie joints at 'vel' degrees per sec using the 'm' command
 	def commandAllJointVelocities(self, vels, left_right='l'):
 		command = None
 		sign = '#'
@@ -412,6 +413,7 @@ class JointTrajectoryServer():
 			elif j == 'g' or j == full_names['g']:
 				idx = 6
 
+			# round up to the nearest velocity command (A=10, B=20 ...)
 			if v < 0:
 				if abs(v) <= 10:
 					cmd_str[idx] = 'A'
@@ -694,7 +696,7 @@ class JointTrajectoryServer():
 							t_interval = period 			# initial velocity calcualtion based on ideal interval
 							initial_command = True 			# dont the period for initial command
 							error_warning = False			# warns when joints are outside final error
-							final_error_tolerance = 3
+							final_error_tolerance = 1.5
 
 							waypoint_angles = angles 		# joint values when waypoint was started
 							#print "WAYPOINT--------", waypoint_num,"of", len(curr_trajectory.points),"---------------------------------------------------"
@@ -704,9 +706,9 @@ class JointTrajectoryServer():
 
 							error_correct_attempts = 0
 							# if the waypoint goal time has not elapsed, or we reached the last waypoint with significant error
-							while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 20):
+							while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 30):
 
-
+								# attempt to re-query the joint state
 								while None in angles.viewvalues():
 									print "Retrying to query joint states..."
 									angles = self.getJointAngles() # get new joint values
@@ -792,6 +794,7 @@ class JointTrajectoryServer():
 									measured_vels[joint_name] = sum(velocity_windows[joint_name])/len(velocity_windows[joint_name]) 	# sliding window measured vel
 									err_vel = goal_vels[joint_name] - measured_vels[joint_name]
 
+									# add the errors to their respective dictionaries
 									positions_err_dict[joint_name].append(err_theta)
 									velocities_err_dict[joint_name].append(err_vel)
 
@@ -823,13 +826,15 @@ class JointTrajectoryServer():
 									initial_command = False
 
 								#print "actual period:", t7 - t1
-								# PWM -----------------------------------------------
-								# send duty cycle
+								# -------------------------------------------------------------------------------------------------------------
+								# PWM 
+								# Send the 'm' command in the style of a PWM signal to acheive the desired velocities across all waypoints
+								# -------------------------------------------------------------------------------------------------------------
 								t1 = time.time()
 								self.commandAllJointVelocities(cmd_vels)
 								t2 = time.time()
 
-								# place the sensor polling in duty pulse
+								# place the sensor polling in duty cylce
 								angles_prev = angles 			# save old joint values
 								angles =  self.getJointAngles() # get new joint values
 								self.updateJointPositions(angles)
@@ -843,7 +848,7 @@ class JointTrajectoryServer():
 									t4 = time.time()
 									curr_duty = (t4 - t2) / period
 
-									# pull down PWM after duty cycle elapses
+									# pull down PWM after duty cycle elapses for each joint
 									isChangedVel = False
 									for j,r in duty_ratios.iteritems():
 										if r <= curr_duty and cmd_vels[j] != 0:
@@ -857,12 +862,12 @@ class JointTrajectoryServer():
 
 								t5 = time.time()
 								t_subdiv = time.time()
-								# END PWM -----------------------------------------------
+								# END PWM ---------------------------------------------------------------------------------------------------
 
 							t_end_waypoint = time.time()
 							waypoint_prev = waypoint
 
-						# TODO make this an actual queue (problems encountered due to multiple trajectories being received for a single plan)
+						# TODO make this an actual queue 
 						self.trajectory_queue = []
 
 						avg_pos_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}

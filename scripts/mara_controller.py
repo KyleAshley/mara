@@ -4,6 +4,9 @@ import rospy
 from camera_publisher import camera_publisher
 import mara_moveit
 import threading
+import copy
+import tf
+from geometry_msgs.msg import PoseStamped
 
 import os, sys, time
 
@@ -35,12 +38,14 @@ from control_msgs.msg import (
 
 
 OPENNI_CMD = "roslaunch openni_launch openni.launch"
-OPE_DIR = "/home/carrt/Dropbox/catkin_ws/src/mara/OPE-MARA"
+OPE_DIR = "/home/carrt/Dropbox/catkin_ws/src/mara/OPE-Release"
 KILL_XNSENSOR_CMD = "killall killXnSensorServer"
 
 class mara_controller():
 	def __init__(self):
 		self.moveit = mara_moveit.MaraMoveIt()
+		self.tf_listen = tf.TransformListener()
+
 		self.rightGripperAction_pub = rospy.Publisher("/mara/limb/right/gripper_action/position", Int32, queue_size=1)
 		self.leftGripperAction_pub = rospy.Publisher("/mara/limb/left/gripper_action/position", Int32, queue_size=1)
 
@@ -173,7 +178,66 @@ class mara_controller():
 			print "Waiting on execution"
 			self.waitOnArmSuccess('right')
 
+	def transformPoseToFrame(self, pos, rot, frame):
+		msg = PoseStamped()
+		msg.header = Header()
+		msg.header.stamp = rospy.Time.now() 
+		msg.header.frame_id = 'camera_link'
 
+		quaternion = tf.transformations.quaternion_from_euler(rot[0], rot[1], rot[2])
+		msg.pose.position.x = pos[0]
+		msg.pose.position.y = pos[1]
+		msg.pose.position.z = pos[2]
+		msg.pose.orientation.x = quaternion[0]
+		msg.pose.orientation.y = quaternion[1]
+		msg.pose.orientation.z = quaternion[2]
+		msg.pose.orientation.w = quaternion[3]
+
+		new_pose = self.tf_listen.transformPose(frame, msg)
+		return new_pose.pose.position, new_pose.pose.orientation
+
+	def removeOPECollisionModels(self):
+		for i in range(100):
+			self.moveit.scene.remove_world_object("OBJECT" + str(i))
+		self.moveit.scene.remove_world_object("TABLE")
+
+	def getObjectPositions(self):
+		# remove old point cloud files
+		rospy.loginfo("Removing old point clouds and collision models")
+		removePCDs(OPE_DIR)
+		self.removeOPECollisionModels()
+
+		# run OPE
+		rospy.loginfo("Running OPE")
+		OPEAssist.runOPE()
+		OPEAssist.loadOPEResults()
+
+		objectLoc = None
+		if OPEAssist.objCount > 0:
+
+			rospy.loginfo("Adding Table Collision Model")
+			pos, q = self.transformPoseToFrame(OPEAssist.tablePos, [0,0,0], 'base_link')
+			OPEAssist.tablePos = [pos.x, pos.y, pos.z]
+
+			#ADD Table Collision Model
+			self.moveit.addObject("TABLE",
+								OPEAssist.tablePos,
+								OPEAssist.tableSize)
+
+			rospy.loginfo("Adding Object Collision Models")
+			# ADD Object Collision Models
+			for x in OPEAssist.objList:
+				pos, q = self.transformPoseToFrame(x['objPos'], x['objRot'], 'base_link')
+				x['objPos'] = [pos.x, pos.y, pos.z]
+				x['objRot'] = [q.x, q.y, q.z, q.w]
+
+				self.moveit.addObject("OBJECT" + str(x['objNumber']),
+									x['objPos'],
+									x['objSize'],
+									x['objRot'])
+		else:
+			rospy.loginfo("No Objects Detected")
+			return 
 
 
 	# Object Grasping
@@ -182,32 +246,28 @@ class mara_controller():
 	def command_grasp_object(self, color=None):
 		rospy.loginfo("Grasp Object Starting")
 
-		# remove any remaining collision models of OPE objects
-		for i in range(50):
-			self.moveit.scene.remove_world_object("OBJECT" + str(i))
-		self.moveit.scene.remove_world_object("TABLE")
-		rospy.sleep(1.0)
-
-		# reset arms
-		print "Moving right arm to waiting position"
-		self.goToWaiting("right")
-
-		print "Moving right gripper"
+		rospy.loginfo("Moving right gripper")
 		self.commandGripperPosition(lr='right', val=80)
 
-		print "Moving to pre object"
-		self.moveArmToPosition( "right", mara_positions.right_preObjectPose, mara_positions.rightWaitingRot )
+		self.objectNum = 2
+		objectPos = OPEAssist.objList[self.objectNum]['objPos']
+		preObjectPos = copy.deepcopy(OPEAssist.objList[self.objectNum]['objPos'])
+		preObjectPos[1] -= 0.2
 
-		print "Moving to object"
-		self.moveArmToPosition( "right", mara_positions.right_objectPose, mara_positions.rightWaitingRot )
+		rospy.loginfo("Moving to pre object")
+		self.moveArmToPosition( "right", preObjectPos, mara_positions.rightWaitingRot )
 
-		print "Moving gripper"
+		self.moveit.scene.remove_world_object("OBJECT" + str(self.objectNum))
+		rospy.loginfo("Moving to object")
+		self.moveArmToPosition( "right", objectPos, mara_positions.rightWaitingRot )
+
+		rospy.loginfo("Moving gripper")
 		self.commandGripperPosition(lr='right', val=40)
 
-		print "Moving to pre object"
-		self.moveArmToPosition("right", mara_positions.right_preObjectPose, mara_positions.rightWaitingRot )
+		rospy.loginfo("Moving to pre object")
+		self.moveArmToPosition("right", preObjectPos, mara_positions.rightWaitingRot )
 
-		print "Moving to waiting"
+		rospy.loginfo("Moving to waiting")
 		self.goToWaiting("right")
 
 
@@ -217,6 +277,10 @@ class mara_controller():
 
 success = rospy.init_node('mara_controller')
 mara = mara_controller()
+# reset arms
+rospy.loginfo("Moving right arm to waiting position")
+mara.goToWaiting("right")
+mara.getObjectPositions()
 mara.command_grasp_object()
 
 print "Done!"
