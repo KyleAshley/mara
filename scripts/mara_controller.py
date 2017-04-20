@@ -35,6 +35,8 @@ from control_msgs.msg import (
 #	$ rosrun mara mara_controller.py   
 
 
+# To kill all MARA processes: $ sudo kill -9 `ps -ef | grep mara | awk '{ print $2 }'`
+
 
 
 OPENNI_CMD = "roslaunch openni_launch openni.launch"
@@ -149,6 +151,8 @@ class mara_controller():
 			print "Waiting on execution"
 			self.waitOnArmSuccess('right')
 
+	# creates a path plan to the specified (x,y,z) coordinates
+	# TODO: Fix the issue where PLANs actually EXECUTE (execution code is commented)
 	def moveArmToPosition(self, arm, pos, orient):
 		if arm == 0 or arm == "left":
 			rospy.loginfo("Moving Left arm")
@@ -178,6 +182,7 @@ class mara_controller():
 			print "Waiting on execution"
 			self.waitOnArmSuccess('right')
 
+	# transforms a position (x,y,z) and orientation (r,p,y) to a new frame that is in the tf tree
 	def transformPoseToFrame(self, pos, rot, frame):
 		msg = PoseStamped()
 		msg.header = Header()
@@ -196,11 +201,13 @@ class mara_controller():
 		new_pose = self.tf_listen.transformPose(frame, msg)
 		return new_pose.pose.position, new_pose.pose.orientation
 
+	# removes all collision models from the planning environment
 	def removeOPECollisionModels(self):
 		for i in range(100):
 			self.moveit.scene.remove_world_object("OBJECT" + str(i))
 		self.moveit.scene.remove_world_object("TABLE")
 
+	# runs OPE and saves obejct/table position then adds them to the planning environment
 	def getObjectPositions(self):
 		# remove old point cloud files
 		rospy.loginfo("Removing old point clouds and collision models")
@@ -249,10 +256,12 @@ class mara_controller():
 		rospy.loginfo("Moving right gripper")
 		self.commandGripperPosition(lr='right', val=80)
 
-		self.objectNum = 2
+		self.objectNum = 1
 		objectPos = OPEAssist.objList[self.objectNum]['objPos']
 		preObjectPos = copy.deepcopy(OPEAssist.objList[self.objectNum]['objPos'])
-		preObjectPos[1] -= 0.2
+		objectPos[1] -= 0.1 			# make the object position just in front of the centroid
+		preObjectPos[1] -= 0.28			# amke the pre-object position just in front of the object
+
 
 		rospy.loginfo("Moving to pre object")
 		self.moveArmToPosition( "right", preObjectPos, mara_positions.rightWaitingRot )

@@ -34,13 +34,13 @@ def loadOPEResults():
     if objCount > 0:
         tablePos = [float(x) for x in ope_results.readline().split()]
         tableSize = [float(x) for x in ope_results.readline().split()]
-        tableSize[0] += 0.3
+        tableSize[0] += 0.3     # scale the table in the X direction to prevent underhand gripping
 
         # GLOBAL TABLE ADJUSTMENT
 
         tablePos[0] = tablePos[0]  # X
         tablePos[1] = tablePos[1]  # Y
-        tablePos[2] = tablePos[2]  -0.16# Z
+        tablePos[2] = tablePos[2]  -0.12# Z
 
         for k in range(objCount):
             ope_results.readline()
@@ -51,7 +51,7 @@ def loadOPEResults():
             # GLOBAL OBJECT ADJUSTMENT
             temp_objPos[0] = temp_objPos[0] # X
             temp_objPos[1] = temp_objPos[1] # Y
-            temp_objPos[2] = temp_objPos[2] +0.04# Z
+            temp_objPos[2] = temp_objPos[2] - 0.01# Z
 
             objList.append({'objNumber':k,
                             'objPos':temp_objPos,

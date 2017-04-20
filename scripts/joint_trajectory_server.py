@@ -72,21 +72,29 @@ import threading
 class JointTrajectoryServer():
 	def __init__(self, device_num=None, left_right='l'):
 
-		self.isInitialized = False
-		self.encoder_decode_error = False
-		self.interface = None 			# python serial interface
+		self.is_initialized = False 		# gets set after constructer successfully finishes
+		self.encoder_decode_error = False	# gets set when theres an issue decoding serial responses... not sure how to fix 
+		self.interface = None 				# python serial interface
 
-		device_list = self.getUSBDeviceNames()
-		if device_num == None:
-			self.device_name = device_list[0] 					# linux device name for serial interface
+		# get the device names from /dev folder
+		device_list = self.getUSBDeviceNames() 
+		if len(device_list) != 0:
+			if device_num == None:
+				self.device_name = device_list[0] 					# linux device name for serial interface
+			else:
+				self.device_name = device_list[device_num] 					# linux device name for serial interface
 		else:
-			self.device_name = device_list[device_num] 					# linux device name for serial interface
+			print "Error initializing serial interface... (make sure the arms are plugged in!)"
+			return
 
+		print "------------------------------------------------------------------------------------------"
+		print "sudo priveleges are needed to load the kernel module and change USB write permissions..."
+		print "------------------------------------------------------------------------------------------"
 		call(["sudo", "chmod", "+777", self.device_name]) 	# give permissions to access device file
 		self.initializeSerialInterface(self.device_name)
 		self.resetSerialInterface()
 
-		# need a better method here
+		# TODO: need a better method here for determining r/l arms
 		if 'r' in left_right:
 			self.arm_name = "right"
 		else:
@@ -94,18 +102,20 @@ class JointTrajectoryServer():
 
 		print "Initializing", self.arm_name, "arm..."
 
-		self.rate = 0.22 					# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
-		self.max_trajectory_velocity = 0.25 # maximum allowed joint velocity (rad/sec)
-		self.pauseControlLoop = False		# flag to set when you want to use serial commands outside of the control loop
+		self.rate = 0.25 					# pulse width period for sending joint commands through USB  (Dont change it) (0.3 is safe, 0.2 is extreme)
+		self.max_trajectory_velocity = 0.3  # maximum allowed joint velocity (rad/sec)
+		self.pause_control_loop = False		# flag to be set when you want to use serial commands outside of the control loop
+		self.planning_failed = False 		# subscribes to the status topic sent from the motion planner 
+											# (THIS FIXES A KNOWN BUG: path plans that result in arm collision are executed (because planning == execution))
 
 		# serial communication results
 		self.joint_array = None 	# most recent hex array from encoders
 		self.joint_angles = None 	# most recent decoded joint angles
 		self.trajectory_queue = [] 	# trajectory queue contains incoming arm trajectory goals
-		self.trajectory_queue_len = 1
+		self.trajectory_queue_len = 1  # holds multiple trajectories if we want to execute queued path plans
 
 		# joint names from ee -> base
-		self.orderedJoints = ['g', 'j6', 'j5', 'j4', 'j3', 'j2', 'j1']
+		self.ordered_joints = ['g', 'j6', 'j5', 'j4', 'j3', 'j2', 'j1']
 		self.full_joint_names = [self.arm_name +'_joint1', self.arm_name +'_joint2', self.arm_name +'_joint3', \
 								 self.arm_name +'_joint4', self.arm_name +'_joint5', self.arm_name +'_joint6']
 
@@ -117,6 +127,7 @@ class JointTrajectoryServer():
 
 		# ros subs and pubs
 		self.rviz_trajectory_sub = rospy.Subscriber('/move_group/result', MoveGroupActionResult, self.updateMoveitTrajectory, queue_size=4)
+		self.rviz_status_sub = rospy.Subscriber('/move_group/status', GoalStatusArray, self.updateMoveitStatus, queue_size=1)
 		self.gripper_sub = rospy.Subscriber('/mara/limb/' + self.arm_name +'/gripper_action/position', Int32, self.updateGripperPosition, queue_size=1)
 
 		self.joint_state_pub = rospy.Publisher("/mara/limb/" +self.arm_name +"/joint_states", JointState, queue_size=1)
@@ -137,9 +148,10 @@ class JointTrajectoryServer():
 	#--------------------------------------------------------------------------------------------------------------------------------------------------#
 	# Callbacks
 	#--------------------------------------------------------------------------------------------------------------------------------------------------#
+	# commands gripper to published position
 	def updateGripperPosition(self, msg):
 		print "Commanding", self.arm_name, 'gripper to', str(msg.data)
-		self.pauseControlLoop = True 	# pause the control loop to free the serial bus
+		self.pause_control_loop = True 	# pause the control loop to free the serial bus
 		rospy.sleep(1.0)
 
 		angles = {self.arm_name+'_joint1':0.0, self.arm_name+'_joint2':0.0,self.arm_name+'_joint3':0.0, \
@@ -162,7 +174,7 @@ class JointTrajectoryServer():
 		msg.status = msg.PENDING
 		self.gripper_result_pub.publish(msg)
 
-
+	# sends joint state feedback on the simple action server
 	def updateFeedback(self, desired_point, angles, error_dict, curr_time):
 		print self.fdbk
 		self.fdbk.header.stamp = rospy.Duration.from_sec(rospy.get_time())
@@ -175,17 +187,26 @@ class JointTrajectoryServer():
 		self.fdbk.error.time_from_start = rospy.Duration.from_sec(curr_time)
 		self.server.publish_feedback(self.fdbk)
 
+	# recognizes ABORTED motion plans
+	def updateMoveitStatus(self, msg):
+		if len(msg.status_list) > 0:
+			if msg.status_list[0].status == msg.status_list[0].ABORTED:
+				print "Error, planning failed!"
+				self.planning_failed = True
+			else:
+				self.planning_failed = False
+
 
 	# receives trajectories from the moveit topic and adds them to the execution queue
 	def updateMoveitTrajectory(self, msg):
-		self.pauseControlLoop = True 	# pause the control loop to free the serial bus
+		self.pause_control_loop = True 	# pause the control loop to free the serial bus (otherwise its constantly queried and we could get bad data)
 		rospy.sleep(0.1)
 
 		# first get the most recent joint states
 		angles = self.getJointAngles() 
 		self.updateJointPositions(angles)
 
-		self.pauseControlLoop = False
+		self.pause_control_loop = False
 		rospy.sleep(0.1)
 
 		# determine what kind of message we received
@@ -264,7 +285,7 @@ class JointTrajectoryServer():
 		try:
 			self.interface = serial.Serial(device_name, 9600,xonxoff=True, timeout=0.1)
 			print self.interface.name
-			self.isInitialized = True
+			self.is_initialized = True
 		except:
 			print("Could not open usb interface for left arm on: \t ---> \t" + str(device_name))
 			print "Attempting to load the kernel module..."
@@ -273,11 +294,11 @@ class JointTrajectoryServer():
 			try:
 				print ("Opening mara control on: \t \t ---> \t" + str(self.interface.name))
 				self.interface = serial.Serial(self.device, 9600, xonxoff=True, timeout=0.1)
-				self.isInitialized = True
+				self.is_initialized = True
 
 			except Exception, e:
 				print "Failed...exiting"
-				self.isInitialized = False
+				self.is_initialized = False
 
 	def resetSerialInterface(self):
 		os.system("sudo modprobe usbserial vendor=0x067b product=0x2303")
@@ -286,7 +307,7 @@ class JointTrajectoryServer():
 		val = self.interface.read(1)
 		while val:
 			val = self.interface.read(1)
-		self.isInitialized = True
+		self.is_initialized = True
 
 
 	# looks for USB devices on /dev, returns a list of stings containing the device names
@@ -470,7 +491,7 @@ class JointTrajectoryServer():
 		return new_vel
 
 	# OLD (Dont use)
-	# static velocity control (only using 10, 20, or 30 deg per sec builtin commands)
+	# static velocity control (only using 10, 20, or 30 deg per sec builtin commands) using 'jv' command
 	def commandJointAngle_STATIC(self, joint_name, angle, vel, variable_velocity=False):
 
 		angles = self.getJointAngles()
@@ -505,7 +526,6 @@ class JointTrajectoryServer():
 				vel = self.signVelocity(angles[joint_name], angle, vel, isGripper)
 				self.commandJointVelocity(joint_name, vel)
 				angles = self.getJointAngles()
-				print angles
 
 				if lower < 0:
 					stop_condition = inRange(angles[joint_name], 360 + lower, 360) or inRange(angles[joint_name], 0, upper)
@@ -517,7 +537,7 @@ class JointTrajectoryServer():
 			#self.stopMovement()
 			self.commandJointVelocity(joint_name, 0)
 
-	# command joints to a specific postion at constant velocity
+	# command joints to a specific postion at constant velocity (using 'm' command)
 	def commandAllJointAngles(self, des_angles, vels):
 
 		curr_angles = self.getJointAngles()
@@ -581,7 +601,7 @@ class JointTrajectoryServer():
 			rospy.sleep(rate)
 
 		print "Done!"
-		self.pauseControlLoop = False
+		self.pause_control_loop = False
 
 
 
@@ -656,7 +676,7 @@ class JointTrajectoryServer():
 
 			while not rospy.is_shutdown():
 
-				if not self.pauseControlLoop:
+				if not self.pause_control_loop:
 					velocity_windows = {'j1':[], 'j2':[], 'j3':[], 'j4':[], 'j5':[], 'j6':[], 'g':[]}		# records instantaneous velocities of joints
 
 					# while no trajectories are being executed, simply update the joint state
@@ -685,6 +705,7 @@ class JointTrajectoryServer():
 						# iterate through waypoints in the trajectory
 						for waypoint, waypoint_num in zip(curr_trajectory.points, range(len(curr_trajectory.points))):
 
+							# check if its the last waypoint (do extra correction if so)
 							last_waypoint = False
 							if waypoint_num == len(curr_trajectory.points)-1:
 								last_waypoint = True
@@ -696,7 +717,7 @@ class JointTrajectoryServer():
 							t_interval = period 			# initial velocity calcualtion based on ideal interval
 							initial_command = True 			# dont the period for initial command
 							error_warning = False			# warns when joints are outside final error
-							final_error_tolerance = 1.5
+							final_error_tolerance = 0.8
 
 							waypoint_angles = angles 		# joint values when waypoint was started
 							#print "WAYPOINT--------", waypoint_num,"of", len(curr_trajectory.points),"---------------------------------------------------"
@@ -704,9 +725,9 @@ class JointTrajectoryServer():
 							#print 'check time = ', t_subdiv - t_start
 							#print 'current waypoint duration', waypoint.time_from_start.to_sec()
 
-							error_correct_attempts = 0
+							error_correct_attempts = 0 		# number of attempted corrections on final waypoint
 							# if the waypoint goal time has not elapsed, or we reached the last waypoint with significant error
-							while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 30):
+							while t_subdiv < t_start + waypoint.time_from_start.to_sec() or (last_waypoint and error_warning and error_correct_attempts < 20):
 
 								# attempt to re-query the joint state
 								while None in angles.viewvalues():
@@ -798,9 +819,9 @@ class JointTrajectoryServer():
 									positions_err_dict[joint_name].append(err_theta)
 									velocities_err_dict[joint_name].append(err_vel)
 
-									# PD calculation
-									kp = 0.05
-									kd = 0.2
+									# PD calculation (these values can probably be tuned a little better)
+									kp = 0.01
+									kd = 0.1
 									pid_vel = vel * min((kp * abs(err_theta)), 1.0) + (kd * err_vel)
 
 									# set duty cycles
@@ -872,7 +893,7 @@ class JointTrajectoryServer():
 
 						avg_pos_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
 						avg_vel_errors = {'j1':0, 'j2':0, 'j3':0, 'j4':0, 'j5':0, 'j6':0, 'g':0}
-						for j in self.orderedJoints:
+						for j in self.ordered_joints:
 							for p_e, v_e in zip(positions_err_dict[j], velocities_err_dict[j]):
 								avg_pos_errors[j] = avg_pos_errors[j] + abs(p_e)
 								avg_vel_errors[j] = avg_vel_errors[j] + abs(v_e)
@@ -917,7 +938,7 @@ success = rospy.init_node('joint_trajectory_controller_'+lr)
 jts = JointTrajectoryServer(device_num=num, left_right=lr)
 
 # initialize the grippers and have user watch to find the device num
-if jts.isInitialized:
+if jts.is_initialized:
 	jts.initializeGripper()
 
 jts.startJointTrajectoryControlLoop()
